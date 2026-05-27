@@ -1,0 +1,25 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# 同時実行を 1 本に絞る（古い実行はキャンセル）
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: googleapis/release-please-action@v4
+        # release-please-config.json と .release-please-manifest.json をリポジトリ直下から自動で読む。
+        # 設定変更時はそのファイルだけ編集する。
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

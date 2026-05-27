@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 脆弱性の報告
+    url: https://github.com/ltac0203-pixel/fincode-subscription-starter/security/advisories/new
+    about: 脆弱性は GitHub Private Vulnerability Reporting で非公開に報告してください
+  - name: 質問・相談
+    url: https://github.com/ltac0203-pixel/fincode-subscription-starter/discussions
+    about: 使い方の質問は Discussions へ（有効化されていれば）

@@ -1,0 +1,92 @@
+name: バグ報告
+description: 動作の不具合を報告する
+title: "bug: <一行要約>"
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ご報告ありがとうございます。再現に必要な情報を入力してください。
+
+        **脆弱性は公開 Issue ではなく [SECURITY.md](../blob/main/SECURITY.md) の手順で報告してください。**
+
+  - type: checkboxes
+    id: prechecks
+    attributes:
+      label: 事前確認
+      options:
+        - label: 既存の Open / Closed Issue を検索した
+          required: true
+        - label: 本番 PAN / CVC / 本番 fincode API キーを本文に含めていない
+          required: true
+        - label: 再現には fincode テストキー（`m_test_*` / `p_test_*`）とテストカード番号を使った
+          required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 何が起きたか、何が起きるべきだったか
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 再現手順
+      description: 可能なら最小限の curl / 画面操作の手順を書いてください
+      placeholder: |
+        1. `docker compose up -d postgres` で起動
+        2. `cd backend && uv run alembic upgrade head && uv run uvicorn app.main:app`
+        3. `POST /api/...` を実行
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待する動作
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の動作
+      description: エラーメッセージ・スタックトレース・スクリーンショットなど（カード情報・JWT・API キーはマスクしてください）
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: コンポーネント
+      multiple: true
+      options:
+        - backend (FastAPI)
+        - frontend (React)
+        - alembic migration
+        - fincode 連携
+        - webhook
+        - docs / OpenAPI
+        - その他
+    validations:
+      required: true
+
+  - type: input
+    id: backend-version
+    attributes:
+      label: コミット SHA / バージョン
+      description: "`git rev-parse HEAD` の出力など"
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 実行環境
+      placeholder: |
+        OS: Windows 11 / macOS 14 / Ubuntu 22.04
+        Python: 3.11.x
+        Node: 22.x
+        Docker Desktop: 4.x
+        ブラウザ: Chrome 126

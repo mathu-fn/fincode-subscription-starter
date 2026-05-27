@@ -1,0 +1,52 @@
+# ---- Frontend ----
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+frontend/vite.config.d.ts
+frontend/vite.config.js
+**/*.tsbuildinfo
+
+# ---- Backend ----
+backend/.venv/
+backend/.pytest_cache/
+backend/__pycache__/
+backend/.coverage
+backend/htmlcov/
+
+# ---- Python 全般 ----
+**/__pycache__/
+**/*.py[cod]
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+
+# ---- 環境変数・シークレット ----
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env.local
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- エディタ / IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ---- ログ・一時ファイル ----
+*.log
+*.tmp
+
+# ---- ツール ----
+.serena
+.claude
+
+# Claude Code 用のメタファイル。AGENTS.md は OSS 貢献者向けに公開するためコミット対象。
+CLAUDE.md
+

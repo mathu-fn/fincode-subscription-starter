@@ -1,0 +1,8 @@
+apis:
+  default:
+    root: docs/api/openapi.yml
+rules:
+  tag-description: off
+  info-license: off
+  info-contact: off
+  no-server-example.com: off
