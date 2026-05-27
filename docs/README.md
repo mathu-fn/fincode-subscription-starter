@@ -27,6 +27,7 @@
 | [architecture/data-model.md](./architecture/data-model.md) | ERモデル、各テーブルの意図、削除方針、外部キー |
 | [architecture/error-handling.md](./architecture/error-handling.md) | 例外階層、Circuit Breaker、HTTPマッピング、再試行方針 |
 | [architecture/commit-guidelines.md](./architecture/commit-guidelines.md) | コミット粒度・プレフィックス規約 |
+| [architecture/branching.md](./architecture/branching.md) | ブランチ運用（GitHub Flow）、PR フロー、main 保護設定 |
 
 ## APIリファレンス
 
@@ -49,7 +50,7 @@
 | ドキュメント | 内容 |
 | --- | --- |
 | [operations/configuration.md](./operations/configuration.md) | 環境変数リファレンス（`.env` の全キーと既定値・用途） |
-| [operations/deployment.md](./operations/deployment.md) | 本番チェックリスト、Uvicorn、Nginx、マイグレーション |
+| [operations/deployment.md](./operations/deployment.md) | 本番チェックリスト、Uvicorn、Nginx、マイグレーション、Webhook 受信 |
 | [operations/api-token-rotation.md](./operations/api-token-rotation.md) | JWT寿命、更新・ローテーション、長期稼働クライアントの注意点 |
 | [operations/password-reset.md](./operations/password-reset.md) | パスワードリセットの設計メモと復元方針 |
 

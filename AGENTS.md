@@ -37,7 +37,9 @@ Backend tests use `pytest` with FastAPI `TestClient`; add tests near changed end
 
 ## Commit & Pull Request Guidelines
 
-Follow the documented commit prefixes in `docs/architecture/commit-guidelines.md`: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, and `security`. Keep commits small and independently revertible, separating API contract changes, React UI changes, schema changes, and tests. Pull requests should describe the change, list verification commands, link relevant issues, and include screenshots for visible UI changes.
+This repository uses **GitHub Flow**: `main` is always deployable, all work happens on short-lived topic branches off `main`, and changes land via PR with squash merge. See `docs/architecture/branching.md` for the full branching policy.
+
+Follow the documented commit prefixes in `docs/architecture/commit-guidelines.md`: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, and `security`. Branch names use the same prefixes (e.g. `feat/subscription-pause`). Keep commits small and independently revertible, separating API contract changes, React UI changes, schema changes, and tests. Pull requests should describe the change, list verification commands, link relevant issues, and include screenshots for visible UI changes.
 
 ## Security & Configuration Tips
 
