@@ -40,7 +40,7 @@ Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
 ```
 
-Reactアプリは認証レイヤでトークンを保持し、API呼び出し時にヘッダーへ付与します。ブラウザストレージに保存するforkでは、XSS対策を本番投入条件にしてください。
+React アプリは認証レイヤーでトークンを保持し、API 呼び出し時にヘッダーへ付与します。ブラウザのストレージにトークンを保存する fork では、XSS 対策を本番リリースの必須条件にしてください。
 
 ## エンドポイント早見表
 

@@ -1,5 +1,10 @@
 # fincode Subscription Starter
 
+[![CI](https://github.com/ltac0203-pixel/fincode-subscription-starter/actions/workflows/ci.yml/badge.svg)](https://github.com/ltac0203-pixel/fincode-subscription-starter/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Node 22+](https://img.shields.io/badge/node-22+-brightgreen.svg)](https://nodejs.org/)
+
 **React + FastAPI** と **fincode** の定期課金を使って、Webアプリ向けサブスクリプション機能を実装するためのOSSリファレンスです。
 
 カード登録、サブスクリプション登録、解約、決済履歴、監査ログを、自社サービスへ取り込める形で提供することを目的にしています。
@@ -215,8 +220,17 @@ npx @redocly/cli lint docs/api/openapi.yml
 
 ## セキュリティ
 
-カード番号、CVC、fincodeトークン、JWT、APIキー、個人情報をログに出さないでください。脆弱性は公開Issueではなく、メンテナへ非公開で報告してください。
+カード番号、CVC、fincodeトークン、JWT、APIキー、個人情報をログに出さないでください。脆弱性は **公開 Issue ではなく**、GitHub の Private Vulnerability Reporting で非公開に報告してください。手順は [SECURITY.md](./SECURITY.md) を参照。
+
+## コントリビュート
+
+Issue / Pull Request 歓迎です。最初に次のドキュメントを読んでください。
+
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — 開発フロー、コミット規約、PR チェックリスト
+- [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) — 行動規範（Contributor Covenant v2.1）
+- [SECURITY.md](./SECURITY.md) — 脆弱性報告手順
+- [AGENTS.md](./AGENTS.md) — コントリビューター向け詳細ガイド（コーディング規約・テスト方針）
 
 ## ライセンス
 
-Apache License, Version 2.0.
+[Apache License, Version 2.0](./LICENSE)。コントリビュートは同ライセンス下で配布されることに同意したものとみなされます。

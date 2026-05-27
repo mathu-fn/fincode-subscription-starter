@@ -12,7 +12,7 @@ published: false
 
 [Fincode](https://www.fincode.jp/) は GMO ペイメントゲートウェイが提供する決済APIです。クレジットカード決済からサブスクリプション課金まで扱えるため、日本向けWebサービスの決済基盤として有力な選択肢です。
 
-一方で、カード登録、定期課金、解約、決済履歴、Webhookまでを1つのWebアプリとしてどう組み立てるかは、公式APIリファレンスだけでは見えにくい領域です。
+一方で、カード登録、定期課金、解約、決済履歴、Webhook までを 1 つの Web アプリとしてどう組み立てるかは、公式 API リファレンスだけでは見えにくい部分です。
 
 そこで、React + FastAPI で動くサブスクリプション課金のOSSスターターを用意しました。
 
@@ -93,19 +93,19 @@ React -> FastAPI router -> Domain service -> FincodeClient -> fincode API
 
 ### Idempotency-Key と Circuit Breaker
 
-fincode の書き込みAPIには Idempotency-Key を付与し、ネットワーク再試行による二重登録を防ぎます。timeoutや5xxには指数バックオフを使い、連続失敗時は Circuit Breaker で fail fast します。
+fincode の書き込み API には Idempotency-Key を付けて、ネットワーク再試行による二重登録を防ぎます。timeout や 5xx には指数バックオフで再試行し、連続で失敗した場合は Circuit Breaker ですぐ失敗を返します。
 
 ### 契約時点のプランスナップショット
 
-プランの正本は fincode 管理画面です。ただし契約時点の金額や名称は `subscriptions` 行へスナップショット保存し、後からプランが編集されても過去契約の意味が変わらないようにします。
+プランのマスターは fincode 管理画面にあります。ただし、契約した時点の金額や名前は `subscriptions` の行にスナップショット保存し、後からプランが編集されても過去の契約の意味が変わらないようにします。
 
 ### 監査ログ
 
-カード登録、契約、解約などの状態変更は `audit_logs` に記録します。誰が、いつ、何を変えたかを後から追えることは、決済を扱うサービスでは重要です。
+カード登録、契約、解約などの状態変更は `audit_logs` に記録します。誰が、いつ、何を変えたかを後から追えるようにしておくことは、決済を扱うサービスでは重要です。
 
 ## テスト
 
-自動テストから実際の fincode API は呼びません。`FincodeClient` や service 層をモックし、FastAPI route、DB状態、監査ログ、例外のHTTPマッピングを検証します。
+自動テストから実際の fincode API は呼びません。`FincodeClient` や service 層をモックして、FastAPI ルート、DB 状態、監査ログ、例外の HTTP マッピングを検証します。
 
 ```bash
 uv run pytest
@@ -115,4 +115,4 @@ npx @redocly/cli lint docs/api/openapi.yml
 
 ## おわりに
 
-Fincodeでサブスクリプション課金を実装したい人が、ゼロから設計を考える時間を減らせる出発点になればと思っています。
+Fincode でサブスクリプション課金を実装したい人が、ゼロから設計を考える時間を減らすための出発点になればと思っています。

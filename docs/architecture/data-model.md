@@ -89,21 +89,21 @@ erDiagram
 
 `users` はアプリ側のアイデンティティとパスワードハッシュを保持します。パスワードは passlib や pwdlib などのPython向けライブラリで bcrypt/argon2 を使って保存します。
 
-`fincode_customers` はローカルユーザーと fincode customer ID を 1:1 で対応させます。初回カード登録または契約操作時に遅延作成します。
+`fincode_customers` は、ローカルユーザーと fincode customer ID を 1:1 で対応させます。初回のカード登録または契約操作のときに、必要になった時点で作成します。
 
-`fincode_cards` は brand、last4、有効期限、fincode card ID だけを保持します。PAN と CVC は保存しません。過去契約や監査ログを説明できるよう、カードは物理削除ではなく soft delete を基本にします。
+`fincode_cards` は brand、last4、有効期限、fincode card ID だけを保持します。PAN と CVC は保存しません。過去の契約や監査ログを後から追えるようにするため、カードは物理削除ではなく soft delete を基本にします。
 
-`subscriptions` は現在および過去の契約行を保持します。契約作成時点の fincode プラン情報をスナップショット保存し、後から fincode 側でプラン名や金額が変わっても過去契約の意味が変わらないようにします。
+`subscriptions` は現在および過去の契約行を保持します。契約を作成した時点の fincode プラン情報をスナップショットとして保存し、後から fincode 側でプラン名や金額が変わっても、過去の契約の意味が変わらないようにします。
 
-`subscription_results` は課金ごとの webhook または照合結果です。Webhook の冪等性には `(fincode_subscription_id, fincode_payment_id)` をキーにした upsert を使います。
+`subscription_results` は、課金ごとの webhook 受信結果や照合結果を保持します。Webhook の冪等性は、`(fincode_subscription_id, fincode_payment_id)` をキーにした upsert で担保します。
 
-`audit_logs` は業務操作の証跡です。誰が何をいつ変えたかを記録し、HTTPリクエスト本文やシークレットは入れません。
+`audit_logs` は業務操作の記録です。誰が何をいつ変えたかを残し、HTTPリクエスト本文やシークレットは含めません。
 
 ## 制約
 
 - `users.email` は unique。
-- `fincode_customers.user_id` は unique にし、1ユーザー1カスタマーを保証する。
-- アクティブ契約は1ユーザー1件に制限する。PostgreSQL の partial unique index を使う：
+- `fincode_customers.user_id` は unique にして、1 ユーザー 1 カスタマーを保証する。
+- アクティブ契約は 1 ユーザー 1 件に制限する。PostgreSQL の partial unique index を使う：
   ```python
   op.create_index(
       "uq_subscriptions_active_user",
@@ -114,8 +114,8 @@ erDiagram
   )
   ```
 - 所有関係には外部キーを張る。
-- カード削除後も請求履歴と監査ログは説明可能な状態を残す。
+- カード削除後も、請求履歴と監査ログは後から内容を追えるように残す。
 
 ## マイグレーション方針
 
-スキーマ変更は Alembic で行います。共有環境に適用済みの migration は編集せず、新しい migration を追加します。原則として downgrade を実装し、forward-only にする場合は理由を明記します。
+スキーマ変更は Alembic で行います。共有環境に適用済みの migration は編集せず、新しい migration を追加します。原則として downgrade を実装し、前進方向のみ（forward-only）にする場合は、その理由を明記します。

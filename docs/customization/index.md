@@ -1,21 +1,21 @@
 # カスタマイズガイド
 
-このスターターはforkして自社のサブスクリプション製品へ取り込む前提です。
+このスターターは、fork して自社のサブスクリプション製品に取り込んで使う前提です。
 
 ## 本番前に変更する箇所
 
 | 領域 | 主なファイル | 補足 |
 | --- | --- | --- |
-| プロダクト識別子 | `README*`, `pyproject.toml`, `package.json` | package名、repository、homepage、support linkを変更 |
-| 実行時設定 | `.env.example`, `app/core/config.py` | URL、secret、allowed origins のplaceholderを置換 |
+| プロダクト識別子 | `README*`, `pyproject.toml`, `package.json` | package 名、repository、homepage、サポートリンクを変更 |
+| 実行時設定 | `.env.example`, `app/core/config.py` | URL、secret、許可する origin のプレースホルダを置き換える |
 | ブランディング | `frontend/src/` | ロゴ、色、文言、画面レイアウト |
-| 認証ポリシー | `app/core/security.py`, `app/api/deps.py` | JWT寿命、パスワードポリシー、トークン失効方針 |
-| 法務文言 | frontendのlegal pages | 利用規約、プライバシーポリシー、特商法表記 |
-| デプロイ | infrastructure files | ドメイン、TLS、プロセスマネージャ、secret store |
+| 認証ポリシー | `app/core/security.py`, `app/api/deps.py` | JWT の有効期限、パスワードポリシー、トークン無効化の方針 |
+| 法務文言 | frontend の legal ページ | 利用規約、プライバシーポリシー、特商法表記 |
+| デプロイ | インフラ関連ファイル | ドメイン、TLS、プロセスマネージャ、secret store |
 
 ## プランと料金
 
-サブスクリプションプランの正本は fincode です。アプリは実行時に契約可能プランを取得し、契約時点のプラン情報を `subscriptions` 行へスナップショット保存します。
+サブスクリプションプランのマスター（一次情報）は fincode 側にあります。アプリは実行時に契約可能なプランを取得し、契約した時点のプラン情報を `subscriptions` の行にスナップショット保存します。
 
 プラン追加・変更:
 
@@ -23,31 +23,31 @@
 2. `plan_xxx` ID を控える。
 3. フロントエンドがラベル、並び順、説明文を固定している場合は表示を更新する。
 
-プロダクト側でプラン設定を所有する明確な理由がない限り、可変のローカル `plans` テーブルは追加しないでください。
+プロダクト側でプラン設定を管理する明確な理由がない限り、変更可能なローカルの `plans` テーブルは追加しないでください。
 
 ## 拡張しやすい箇所
 
 | 目的 | 着手地点 |
 | --- | --- |
-| メール認証 | Auth service、user model、email sender、保護route dependency |
-| 1ユーザー複数アクティブ契約 | active subscription unique制約と契約UIを見直す |
-| クーポン | 権威をfincode側に置くかローカルに置くか決め、優先順位を文書化 |
-| Webhook駆動のDunning | [webhooks.md](./webhooks.md) |
-| 外部連携 | DB commit後にserviceからdomain eventを発行 |
+| メール認証 | Auth service、user model、メール送信サービス、保護ルートの dependency |
+| 1 ユーザー複数アクティブ契約 | アクティブ契約の unique 制約と契約 UI を見直す |
+| クーポン | マスターを fincode 側に置くか、ローカルに置くかを決めて、優先順位をドキュメント化する |
+| Webhook 駆動の支払い催促（Dunning） | [webhooks.md](./webhooks.md) |
+| 外部連携 | DB commit 後に、サービス層からドメインイベントを発行する |
 
-## 静かに無効化しないガード
+## うっかり無効化してはいけないガード
 
 | ガード | 理由 |
 | --- | --- |
-| fincodeログのマスク | token、カード情報、secret漏洩を防ぐ |
-| fincode書き込みのIdempotency-Key | 再試行時の二重カード/二重契約を防ぐ |
-| 状態変更を囲むDBトランザクション | ローカルDBの部分書き込みを防ぐ |
-| 監査ログ | 業務証跡を残す |
-| JWT検証dependency | ユーザーリソースへの匿名アクセスを防ぐ |
-| 所有権チェック | 他ユーザーのカード/契約アクセスを防ぐ |
-| レート制限 | ブルートフォースと課金濫用を減らす |
-| アクティブ契約の一意制約 | レースによる二重契約を防ぐ |
+| fincode ログのマスク | token、カード情報、シークレットの漏洩を防ぐ |
+| fincode 書き込みの Idempotency-Key | 再試行時の二重カード登録 / 二重契約を防ぐ |
+| 状態変更を囲む DB トランザクション | ローカル DB に中途半端な状態が残るのを防ぐ |
+| 監査ログ | 業務上の操作記録を残す |
+| JWT 検証 dependency | ユーザーのリソースに匿名でアクセスされないようにする |
+| 所有権チェック | 他ユーザーのカード / 契約へのアクセスを防ぐ |
+| レート制限 | 総当たり攻撃や課金の悪用を減らす |
+| アクティブ契約の一意制約 | 同時アクセスによる二重契約を防ぐ |
 
 ## 生成物とvendor
 
-仮想環境、依存キャッシュ、ローカルビルド成果物、`.env`、coverage report、frontend build artifact は、リポジトリで明示的に必要とされない限りコミットしません。
+仮想環境、依存キャッシュ、ローカルでのビルド成果物、`.env`、カバレッジレポート、フロントエンドのビルド成果物は、明示的に必要な場合を除いてコミットしません。
