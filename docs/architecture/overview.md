@@ -14,17 +14,16 @@ flowchart LR
     Breaker["CircuitBreaker"]
     DB[("PostgreSQL<br/>users / fincode_customers / fincode_cards<br/>subscriptions / subscription_results / audit_logs / webhook_events_seen")]
     FincodeApi(("fincode API"))
-    Worker["バックグラウンドワーカー<br/>webhook / ドメインイベント副作用"]
+    WebhookIn(("fincode Webhook"))
 
     Browser -->|REST + JWT| Api
+    WebhookIn -->|HMAC 署名| Api
     Api --> Deps
     Deps --> Managers
     Managers --> DB
     Managers --> Fincode
     Fincode --> Breaker
     Fincode --> FincodeApi
-    Managers -. events .-> Worker
-    Worker --> DB
 ```
 
 ブラウザが fincode を直接呼び出すのはカードトークン化だけです。FastAPI はトークンのみを受け取り、カスタマー、カード、プラン、サブスクリプション、Webhook処理をサーバー側で行います。
@@ -95,7 +94,6 @@ sequenceDiagram
     participant FC as FincodeClient
     participant FA as fincode API
     participant DB as PostgreSQL
-    participant W as Worker
 
     U->>API: POST /api/subscription { fincode_plan_id, card_id }
     API->>API: schema、JWT、所有権を検証
@@ -110,7 +108,6 @@ sequenceDiagram
     FC->>FA: 契約作成
     SM->>DB: 契約スナップショットと監査ログを保存
     SM->>DB: commit
-    SM-.->W: ドメインイベント発行
     API-->>U: 201 Created
 ```
 
@@ -118,11 +115,12 @@ sequenceDiagram
 
 - 1ユーザーは最大1つのアクティブ契約だけを持つ。
 - プラン名、金額、間隔、fincodeの生ペイロードは契約行へスナップショット保存する。
-- ドメインイベントはトランザクション commit 後に発火する。
 
-## バックグラウンド処理
+## Webhook 処理
 
-Webhook処理、通知、照合、下流プロビジョニングなどの遅い副作用はワーカープロセスで扱います。Celery、RQ、Dramatiq、軽量なasync task runnerなどを選べますが、API契約はワーカー実装に依存させません。
+fincode からの定期課金結果 Webhook (`POST /api/webhooks/fincode`) は、本スターターでは **FastAPI プロセス内で同期処理** します。署名検証 → 冪等性チェック (`webhook_events_seen`) → `subscription_results` の upsert までを 1 リクエスト内で完結させ、204 で応答します。
+
+通知配信や下流プロビジョニングなど、より重い副作用を伴う処理を追加する場合は、fork 側で別途キュー / ワーカーを導入してください（本リポジトリには同梱していません）。
 
 ## 次に読むもの
 

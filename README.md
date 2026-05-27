@@ -210,6 +210,7 @@ npx @redocly/cli lint docs/api/openapi.yml
 - [Fincodeセットアップ](./docs/getting-started/fincode-setup.md)
 - [API仕様](./docs/api/README.md)
 - [アーキテクチャ概要](./docs/architecture/overview.md)
+- [環境変数リファレンス](./docs/operations/configuration.md)
 - [本番デプロイ](./docs/operations/deployment.md)
 
 ## セキュリティ

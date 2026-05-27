@@ -1,86 +1,92 @@
 # テストガイド
 
-テストは実際の fincode API に依存せず、アプリの挙動を検証します。
+テストは実際の fincode API に依存せず、アプリの挙動を検証します。バックエンドは `pytest`、フロントエンドは `Vitest`、API 契約は `Redocly CLI` で検証します。
 
 ## テストスタック
 
 | レイヤ | ツール | 主な場所 |
 | --- | --- | --- |
-| Python / FastAPI | pytest, httpx TestClient | `tests/` |
-| データベース | SQLAlchemy test session + Alembic | `tests/integration/` |
+| Python / FastAPI | pytest, httpx AsyncClient | `backend/tests/` |
+| データベース | testcontainers-python（PostgreSQL 16）+ Alembic | `backend/tests/conftest.py` |
 | React | Vitest | `frontend/src/**/*.test.ts(x)` |
 | API契約 | Redocly CLI | `docs/api/openapi.yml` |
 
 ## コマンド
 
 ```bash
-uv run pytest
-uv run pytest tests/unit
-uv run pytest tests/integration
-npm run test
+# バックエンド
+cd backend
+uv run pytest                                # 全テスト
+uv run pytest tests/test_auth.py             # 単一ファイル
+uv run pytest --cov=app --cov-report=term-missing
+
+# フロントエンド
+cd frontend
+npm run test:run
+
+# OpenAPI 仕様
 npx @redocly/cli lint docs/api/openapi.yml
 ```
 
-テストでは `TEST_DATABASE_URL` を使い、開発DBとは分けてください。
+## DB テスト
 
-## DBテスト
+PostgreSQL 固有機能（JSONB、partial unique index）を使うため、SQLite では代替できません。`backend/tests/conftest.py` が次のことを自動で行います。
 
-Integration test はテストセッション開始時にクリーンなスキーマを作るか、`TEST_DATABASE_URL` に対して Alembic migration を実行します。
+- セッション開始時に `testcontainers-python` で PostgreSQL 16 コンテナを起動
+- Alembic の `upgrade head` でスキーマを構築
+- 各テストの前に全テーブルを TRUNCATE し、slowapi のレート制限カウンタもリセット
 
-推奨方針:
+そのため `TEST_DATABASE_URL` のような環境変数や、テスト用 DB の手動準備は不要です。Docker Desktop が起動している必要があります。
 
-- PostgreSQL 固有機能（JSONB、partial unique index）を使うため SQLite で代替しない。テストは `testcontainers-python` で一時 PostgreSQL を立ち上げる。
-- テスト間はトランザクションrollbackまたはtruncateで状態を消す。
-- 共有seedではなくfactoryを使う。
-- 契約・カード操作後のDB状態をassertする。
+## 認証付きリクエスト
 
-## fincodeをモックする
+`auth_client` フィクスチャを使うと、登録済みユーザーで認証ヘッダー付きの `httpx.AsyncClient` が手に入ります。新規登録は `registered_user` フィクスチャが `POST /api/register` を呼びます。
 
-自動テストから fincode テストモードを呼ばないでください。レイテンシ、レート制限、非決定性、秘密情報管理のリスクが増えます。
+## fincode をモックする
 
-モック境界の例:
+自動テストから fincode テスト環境 API を呼び出してはいけません。レイテンシ、レート制限、秘密情報管理、非決定性などのリスクが増えます。
 
-- `FincodeClient` の低レベルテストでは `httpx.MockTransport`。
-- `CustomerService`、`CardService`、`PlanService`、`SubscriptionService` はservice fake。
-- `/api/webhooks/fincode` はpayload fixture。
+モック境界の選び方:
 
-service fake の例:
+- 低レベル HTTP テスト: `httpx.MockTransport` で `FincodeHttpClient` を直接駆動
+- ドメインサービス / API ルートのテスト: `app.dependency_overrides[get_fincode_client]` で `FincodeClient` プロトコルを満たす fake 実装に差し替える
+
+fake クライアントの実装例:
 
 ```python
-class FakePlanService:
-    async def fetch_plan(self, plan_id: str):
+class FakeFincodeClient:
+    async def create_customer(self, *, idempotency_key: str) -> dict:
+        return {"id": "cust_test", "raw": {}}
+
+    async def get_plan(self, plan_id: str) -> dict:
         return {
             "id": plan_id,
-            "name": "Standard",
-            "amount": 1000,
+            "plan_name": "Standard",
+            "amount": "1000",
             "interval": "month",
-            "raw": {"id": plan_id},
         }
 ```
 
-## APIテスト
+## API テスト
 
-APIテストは `TestClient` または `httpx.AsyncClient` で FastAPI route を駆動し、次を確認します。
+API テストは `httpx.AsyncClient` 経由で FastAPI ルートを駆動し、次を確認します。
 
-- ステータスコード。
-- レスポンスschema。
-- DB状態。
-- 成功した状態変更で監査ログが作られること。
-- カード番号のフル値を受け付けず、保存もしないこと。
+- HTTP ステータスコード
+- レスポンス schema（`detail.code` / `detail.message` の形）
+- DB 状態（カード行、契約行、`audit_logs` の挿入など）
+- カード番号や CVC を受け付けず、保存もしないこと
 
-## カバレッジ
+## レース系テスト
 
-カバレッジは品質の補助指標であり、シナリオ網羅の代わりではありません。
+「1 ユーザー = 最大 1 アクティブ契約」のような不変条件は `asyncio.gather` で複数タスクを同時に起動し、PostgreSQL の partial unique index が `IntegrityError` を返すこと、それがアプリ例外（`ActiveSubscriptionExistsError`）に翻訳されることを検証します。
 
-```bash
-uv run pytest --cov=app --cov-report=term-missing
-```
+## 優先するシナリオ
 
-優先度の高いシナリオ:
+カバレッジ数値は補助指標です。次のシナリオを必ず網羅してください。
 
-- 登録/ログインとJWT保護エンドポイント。
-- カードトークン登録成功とfincode失敗。
-- アクティブ契約の一意性。
-- 解約。
-- Webhook冪等性。
-- fincode timeout/rate-limit/server-error のHTTPマッピング。
+- 登録 / ログインと JWT 保護エンドポイント
+- カードトークン登録の成功と fincode 失敗
+- アクティブ契約の一意性（race を含む）
+- 解約フロー
+- Webhook の署名検証と冪等性
+- fincode timeout / rate-limit / server-error の HTTP マッピング
