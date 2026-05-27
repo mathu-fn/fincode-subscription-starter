@@ -1,0 +1,570 @@
+openapi: 3.0.3
+info:
+  title: fincode Subscription Starter API仕様
+  version: 1.0.0
+  description: |
+    React + FastAPI ベースの fincode サブスクリプションスターター向け REST API 仕様です。
+
+    認証が必要なエンドポイントは JWT Bearer 認証を使用します。
+servers:
+  - url: http://localhost:8000
+    description: ローカル FastAPI サーバー
+  - url: https://api.example.com
+    description: 本番 API
+tags:
+  - name: 認証
+  - name: サブスクリプション
+  - name: カード
+  - name: Webhook
+paths:
+  /api/register:
+    post:
+      tags: [認証]
+      operationId: register
+      summary: ユーザー登録
+      security: []
+      x-rateLimit: 5/min
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: 登録成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/login:
+    post:
+      tags: [認証]
+      operationId: login
+      summary: ログインしてJWTを発行
+      security: []
+      x-rateLimit: 5/min
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: ログイン成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/logout:
+    post:
+      tags: [認証]
+      operationId: logout
+      summary: ログアウト
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: ログアウト成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/session-status:
+    get:
+      tags: [認証]
+      operationId: sessionStatus
+      summary: 認証状態確認
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 認証状態
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authenticated, user]
+                properties:
+                  authenticated:
+                    type: boolean
+                  user:
+                    type: object
+                    nullable: true
+                    allOf:
+                      - $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/user:
+    get:
+      tags: [認証]
+      operationId: getUser
+      summary: 認証ユーザー情報取得
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: ユーザー情報
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/subscription:
+    get:
+      tags: [サブスクリプション]
+      operationId: getSubscription
+      summary: アクティブなサブスクリプション取得
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: アクティブ契約または null
+          content:
+            application/json:
+              schema:
+                type: object
+                nullable: true
+                allOf:
+                  - $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [サブスクリプション]
+      operationId: createSubscription
+      summary: サブスクリプション登録
+      description: |
+        `Idempotency-Key` ヘッダを付与した再試行は安全です。同一キーで再 POST した場合、既に成功した契約があればその契約が返り、fincode 側にも同じ Idempotency-Key が伝搬されるため重複契約は作られません。
+      security:
+        - bearerAuth: []
+      x-rateLimit: 3/min
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: |
+            クライアントが生成する重複防止キー（最大 64 文字）。同じユーザ・同じキーでの再送はキーが既に成功裏に消費されていれば元の契約を冪等に返します。未指定の場合はサーバ側で UUID が生成されますが、その場合の再試行は重複契約のリスクがあります。
+          schema:
+            type: string
+            maxLength: 64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubscriptionRequest'
+      responses:
+        '201':
+          description: 契約作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/ApplicationError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [サブスクリプション]
+      operationId: cancelSubscription
+      summary: サブスクリプション解約
+      security:
+        - bearerAuth: []
+      x-rateLimit: 5/min
+      responses:
+        '200':
+          description: 解約成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+  /api/subscription/history:
+    get:
+      tags: [サブスクリプション]
+      operationId: getSubscriptionHistory
+      summary: 決済履歴取得
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: 決済履歴
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBillingHistory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/subscription/plans:
+    get:
+      tags: [サブスクリプション]
+      operationId: getPlans
+      summary: 有効な fincode プラン一覧取得
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: プラン一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Plan'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/subscription/cards:
+    get:
+      tags: [カード]
+      operationId: getCards
+      summary: 登録済みカード一覧取得
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: カード一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Card'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [カード]
+      operationId: createCard
+      summary: fincodeトークンからカード登録
+      security:
+        - bearerAuth: []
+      x-rateLimit: 3/min
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCardRequest'
+      responses:
+        '201':
+          description: カード登録成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/subscription/cards/{card_id}:
+    delete:
+      tags: [カード]
+      operationId: deleteCard
+      summary: カード削除
+      security:
+        - bearerAuth: []
+      x-rateLimit: 5/min
+      parameters:
+        - name: card_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: カード削除成功
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+        '409':
+          $ref: '#/components/responses/ApplicationError'
+  /api/webhooks/fincode:
+    post:
+      tags: [Webhook]
+      operationId: fincodeWebhook
+      summary: fincode webhook受信
+      description: JWT ではなく fincode の署名検証で保護します。
+      security: []
+      x-rateLimit: 120/min
+      parameters:
+        - name: Fincode-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '204':
+          description: イベント受理
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "`POST /api/login` で返される JWT。"
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PerPage:
+      name: per_page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  responses:
+    Unauthorized:
+      description: 未認証
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApplicationError'
+    ValidationError:
+      description: バリデーションエラー
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+    ApplicationError:
+      description: アプリケーションエラー
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApplicationError'
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    AuthResponse:
+      type: object
+      required: [access_token, token_type, expires_at, user]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum: [bearer]
+        expires_at:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/User'
+    User:
+      type: object
+      required: [id, email, name, created_at]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    Plan:
+      type: object
+      required: [fincode_plan_id, name, amount, interval]
+      properties:
+        fincode_plan_id:
+          type: string
+          example: plan_test_abc123
+        name:
+          type: string
+        amount:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          default: JPY
+        interval:
+          type: string
+          example: month
+    CreateSubscriptionRequest:
+      type: object
+      required: [fincode_plan_id, card_id]
+      properties:
+        fincode_plan_id:
+          type: string
+        card_id:
+          type: integer
+    Subscription:
+      type: object
+      required: [id, status, fincode_plan_id, plan_name, plan_amount, created_at]
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+          enum: [active, cancelled, unpaid, expired]
+        fincode_subscription_id:
+          type: string
+          nullable: true
+        fincode_plan_id:
+          type: string
+        plan_name:
+          type: string
+        plan_amount:
+          type: integer
+        plan_interval:
+          type: string
+        current_period_end:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    CreateCardRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          maxLength: 2048
+          description: fincode.js が発行したカードトークン。カードのフル情報は送信しないこと。
+    Card:
+      type: object
+      required: [id, brand, last4, exp_month, exp_year, created_at]
+      properties:
+        id:
+          type: integer
+        brand:
+          type: string
+        last4:
+          type: string
+          minLength: 4
+          maxLength: 4
+        exp_month:
+          type: integer
+        exp_year:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+    BillingHistoryItem:
+      type: object
+      required: [id, status, amount, charged_at]
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        amount:
+          type: integer
+        fincode_payment_id:
+          type: string
+          nullable: true
+        charged_at:
+          type: string
+          format: date-time
+    PaginatedBillingHistory:
+      type: object
+      required: [data, page, per_page, total]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillingHistoryItem'
+        page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+    ApplicationError:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          oneOf:
+            - type: string
+            - type: object
+              required: [code, message]
+              properties:
+                code:
+                  type: string
+                message:
+                  type: string
+    ValidationError:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            required: [loc, msg, type]
+            properties:
+              loc:
+                type: array
+                items:
+                  oneOf:
+                    - type: string
+                    - type: integer
+              msg:
+                type: string
+              type:
+                type: string
