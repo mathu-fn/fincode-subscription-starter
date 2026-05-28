@@ -49,4 +49,5 @@ desktop.ini
 
 # Claude Code 用のメタファイル。AGENTS.md は OSS 貢献者向けに公開するためコミット対象。
 CLAUDE.md
-
+AGENTS.md
+.agents
