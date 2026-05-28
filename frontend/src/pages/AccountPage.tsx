@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { LoadingButton } from "../components/LoadingButton";
 import { useAuth } from "../hooks/useAuth";
 
@@ -8,6 +9,18 @@ export function AccountPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  async function handleLogout() {
+    setIsSubmitting(true);
+    try {
+      await logout();
+      navigate("/login", { replace: true });
+    } finally {
+      setIsSubmitting(false);
+      setConfirmOpen(false);
+    }
+  }
 
   return (
     <section className="mx-auto grid max-w-5xl gap-6">
@@ -33,20 +46,24 @@ export function AccountPage() {
             variant="danger"
             isLoading={isSubmitting}
             loadingLabel="ログアウト中..."
-            onClick={async () => {
-              setIsSubmitting(true);
-              try {
-                await logout();
-                navigate("/login", { replace: true });
-              } finally {
-                setIsSubmitting(false);
-              }
-            }}
+            onClick={() => setConfirmOpen(true)}
           >
             ログアウト
           </LoadingButton>
         </div>
       </article>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="ログアウトしますか？"
+        description="現在のセッションを終了します。再度ご利用にはログインが必要です。"
+        confirmLabel="ログアウト"
+        loadingLabel="ログアウト中..."
+        variant="danger"
+        isConfirming={isSubmitting}
+        onConfirm={handleLogout}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </section>
   );
 }

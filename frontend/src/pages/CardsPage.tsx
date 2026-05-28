@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { LoadingButton } from "../components/LoadingButton";
 import { apiFetch, ApiError } from "../lib/apiClient";
@@ -23,6 +24,7 @@ export function CardsPage() {
   const [loaded, setLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null);
+  const [pendingDeleteCard, setPendingDeleteCard] = useState<Card | null>(null);
   const [error, setError] = useState<ApiError | Error | null>(null);
   const fincodeRef = useRef<FincodeUiBundle | null>(null);
 
@@ -81,12 +83,15 @@ export function CardsPage() {
     }
   }
 
-  async function onDelete(cardId: number) {
+  async function confirmDelete() {
+    const card = pendingDeleteCard;
+    if (!card) return;
     setError(null);
-    setDeletingCardId(cardId);
+    setDeletingCardId(card.id);
     try {
-      await apiFetch(`/api/subscription/cards/${cardId}`, { method: "DELETE" });
+      await apiFetch(`/api/subscription/cards/${card.id}`, { method: "DELETE" });
       await refresh();
+      setPendingDeleteCard(null);
     } catch (e) {
       setError(e as ApiError);
     } finally {
@@ -118,7 +123,7 @@ export function CardsPage() {
                   disabled={deletingCardId !== null}
                   isLoading={deletingCardId === c.id}
                   loadingLabel="削除中..."
-                  onClick={() => onDelete(c.id)}
+                  onClick={() => setPendingDeleteCard(c)}
                 >
                   削除
                 </LoadingButton>
@@ -141,6 +146,28 @@ export function CardsPage() {
           </LoadingButton>
         </form>
       </article>
+
+      <ConfirmDialog
+        open={pendingDeleteCard !== null}
+        title="カードを削除しますか？"
+        description={
+          pendingDeleteCard ? (
+            <>
+              <p>
+                {pendingDeleteCard.brand} **** {pendingDeleteCard.last4} （{pendingDeleteCard.exp_month}/
+                {pendingDeleteCard.exp_year}）を削除します。
+              </p>
+              <p className="mt-2 text-slate-500">この操作は取り消せません。</p>
+            </>
+          ) : null
+        }
+        confirmLabel="削除する"
+        loadingLabel="削除中..."
+        variant="danger"
+        isConfirming={deletingCardId !== null}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDeleteCard(null)}
+      />
     </section>
   );
 }
