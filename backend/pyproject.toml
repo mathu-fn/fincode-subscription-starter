@@ -20,6 +20,7 @@ dependencies = [
     "structlog>=24.1.0,<25.0.0",
     "python-multipart>=0.0.9,<0.1.0",
     "email-validator>=2.2.0,<3.0.0",
+    "prometheus-fastapi-instrumentator>=7.0.0,<8.0.0",
 ]
 
 [dependency-groups]
@@ -31,6 +32,10 @@ dev = [
     "testcontainers[postgres]>=4.7.0,<5.0.0",
     "freezegun>=1.5.0,<2.0.0",
     "aiosqlite>=0.20.0,<1.0.0",
+    "ruff>=0.8.0,<1.0.0",
+    "mypy>=1.13.0,<2.0.0",
+    "pre-commit>=4.0.0,<5.0.0",
+    "polyfactory>=2.18.0,<3.0.0",
 ]
 
 [build-system]
@@ -49,3 +54,45 @@ addopts = "-ra"
 [tool.coverage.run]
 source = ["app"]
 omit = ["tests/*", "alembic/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "C4",   # flake8-comprehensions
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    "E501",   # line length は formatter に任せる
+    "B008",   # FastAPI の Depends() は関数引数のデフォルトに置く慣習
+    "RUF002", # 日本語コメント中の全角記号は許容
+    "RUF003", # 日本語コメント中の全角記号は許容
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["alembic/versions/"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+module = ["testcontainers.*", "freezegun.*", "slowapi.*"]
+ignore_missing_imports = true
