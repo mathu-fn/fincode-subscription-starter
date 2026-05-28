@@ -2,12 +2,21 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { Layout } from "./components/Layout";
 import { RequireAuth } from "./components/RequireAuth";
-import { AuthProvider } from "./hooks/useAuth";
+import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { AccountPage } from "./pages/AccountPage";
 import { HomePage } from "./pages/HomePage";
+import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { RegisterPage } from "./pages/RegisterPage";
+
+function RootRoute() {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return <div className="mx-auto grid max-w-5xl gap-6 text-slate-700">読み込み中...</div>;
+  }
+  return user ? <HomePage /> : <LandingPage />;
+}
 
 export function App() {
   return (
@@ -16,14 +25,7 @@ export function App() {
         <Route element={<Layout />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route
-            path="/"
-            element={
-              <RequireAuth>
-                <HomePage />
-              </RequireAuth>
-            }
-          />
+          <Route path="/" element={<RootRoute />} />
           <Route
             path="/account"
             element={
