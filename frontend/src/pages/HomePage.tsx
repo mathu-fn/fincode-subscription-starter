@@ -53,10 +53,10 @@ type PaginatedBillingHistory = {
 
 const FINCODE_MOUNT_ID = "fincode-ui-mount";
 const PER_PAGE = 10;
-const pageClass = "mx-auto grid max-w-6xl gap-7";
-const sectionClass = "grid scroll-mt-24 gap-4";
-const cardClass = "border border-sky-200 bg-white p-6 shadow-sm shadow-sky-100";
-const summaryCardClass = "grid min-h-32 gap-2 border border-sky-200 bg-white p-5 shadow-sm shadow-sky-100";
+const pageClass = "mx-auto grid max-w-5xl gap-5";
+const sectionClass = "grid scroll-mt-24 gap-3";
+const cardClass = "border border-sky-200 bg-white p-4 shadow-sm shadow-sky-100";
+const summaryCardClass = "grid min-h-28 gap-1.5 border border-sky-200 bg-white p-4 shadow-sm shadow-sky-100";
 const labelClass = "grid gap-1.5 text-sm font-semibold text-slate-700";
 const inputClass =
   "min-h-11 border border-sky-200 bg-white px-3 py-2 text-base font-normal text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200";
@@ -76,6 +76,7 @@ export function HomePage() {
   const [cardSubmitting, setCardSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null);
+  const [showCardForm, setShowCardForm] = useState<boolean>(false);
   const [page, setPage] = useState(1);
   const [history, setHistory] = useState<PaginatedBillingHistory | null>(null);
   const [latestHistory, setLatestHistory] = useState<HistoryItem | null>(null);
@@ -150,6 +151,7 @@ export function HomePage() {
   }, [page, refreshHistory]);
 
   useEffect(() => {
+    if (!showCardForm) return;
     let cancelled = false;
     let mountedBundle: FincodeUiBundle | null = null;
     (async () => {
@@ -168,7 +170,7 @@ export function HomePage() {
       unmountFincodeUi(mountedBundle?.ui);
       fincodeRef.current = null;
     };
-  }, []);
+  }, [showCardForm]);
 
   async function subscribe(planId: string) {
     if (!selectedCardId) {
@@ -229,6 +231,7 @@ export function HomePage() {
         body: JSON.stringify({ token })
       });
       await refreshPlansAndCards();
+      setShowCardForm(false);
     } catch (e) {
       setError(e as ApiError);
     } finally {
@@ -265,7 +268,7 @@ export function HomePage() {
 
       <ErrorBanner error={error} />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         <article className={summaryCardClass}>
           <span className="text-sm text-slate-500">現在の契約</span>
           <strong className="text-2xl font-bold leading-tight text-sky-950">
@@ -380,9 +383,9 @@ export function HomePage() {
                 </select>
               </label>
             )}
-            <ul className="grid gap-4">
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {plans.map((plan) => (
-                <li key={plan.fincode_plan_id} className={`${cardClass} grid gap-3`}>
+                <li key={plan.fincode_plan_id} className={`${cardClass} grid content-start gap-2`}>
                   <h3 className="text-lg font-bold text-sky-950">{plan.name}</h3>
                   <p className="text-2xl font-bold text-slate-900">
                     ¥{plan.amount.toLocaleString()} <span className="text-base font-normal text-slate-500">/ {plan.interval}</span>
@@ -405,54 +408,76 @@ export function HomePage() {
       </section>
 
       <section id="cards" className={sectionClass}>
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl font-bold text-sky-950">カード</h2>
+          {!showCardForm && (
+            <button
+              type="button"
+              className={primaryLinkClass}
+              onClick={() => {
+                setError(null);
+                setShowCardForm(true);
+              }}
+            >
+              カードを追加
+            </button>
+          )}
         </div>
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(280px,0.8fr)_minmax(360px,1.2fr)]">
-          <article className={cardClass}>
-            <h3 className="mb-3 text-lg font-bold text-sky-950">登録済みカード</h3>
-            {!plansLoaded ? (
-              <p className="text-slate-600">読み込み中...</p>
-            ) : cards.length === 0 ? (
-              <p className="text-slate-700">登録済みのカードはまだありません。</p>
-            ) : (
-              <ul className="grid gap-3">
-                {cards.map((card) => (
-                  <li key={card.id} className="flex items-center justify-between gap-3 bg-sky-50 px-4 py-3">
-                    <span className="text-sm font-medium text-slate-800">
-                      {card.brand} **** {card.last4} ({card.exp_month}/{card.exp_year})
-                    </span>
-                    <LoadingButton
-                      type="button"
-                      variant="ghost"
-                      className="min-h-0 text-red-700 hover:text-red-900 focus:ring-red-500"
-                      disabled={deletingCardId !== null}
-                      isLoading={deletingCardId === card.id}
-                      loadingLabel="削除中..."
-                      onClick={() => onDeleteCard(card.id)}
-                    >
-                      削除
-                    </LoadingButton>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </article>
-          <article className={cardClass}>
-            <h3 className="text-lg font-bold text-sky-950">新規カードを追加</h3>
-            <p className="mt-3 text-sm text-slate-600">
+        <article className={cardClass}>
+          <h3 className="mb-3 text-lg font-bold text-sky-950">登録済みカード</h3>
+          {!plansLoaded ? (
+            <p className="text-slate-600">読み込み中...</p>
+          ) : cards.length === 0 ? (
+            <p className="text-slate-700">登録済みのカードはまだありません。</p>
+          ) : (
+            <ul className="grid gap-3">
+              {cards.map((card) => (
+                <li key={card.id} className="flex items-center justify-between gap-3 bg-sky-50 px-4 py-3">
+                  <span className="text-sm font-medium text-slate-800">
+                    {card.brand} **** {card.last4} ({card.exp_month}/{card.exp_year})
+                  </span>
+                  <LoadingButton
+                    type="button"
+                    variant="ghost"
+                    className="min-h-0 text-red-700 hover:text-red-900 focus:ring-red-500"
+                    disabled={deletingCardId !== null}
+                    isLoading={deletingCardId === card.id}
+                    loadingLabel="削除中..."
+                    onClick={() => onDeleteCard(card.id)}
+                  >
+                    削除
+                  </LoadingButton>
+                </li>
+              ))}
+            </ul>
+          )}
+        </article>
+        {showCardForm && (
+          <article className={`${cardClass} max-w-[480px]`}>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-lg font-bold text-sky-950">新規カードを追加</h3>
+              <button
+                type="button"
+                className="text-sm font-semibold text-slate-600 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => setShowCardForm(false)}
+                disabled={cardSubmitting}
+              >
+                閉じる
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">
               カード番号と CVC はサーバーへ送信されません。fincode の UI コンポーネントでトークン化されたトークンのみがバックエンドへ送信されます。
             </p>
-            <form onSubmit={onSubmitCard} className="mt-4 grid gap-4">
+            <form onSubmit={onSubmitCard} className="mt-3 grid gap-3">
               <div id={`${FINCODE_MOUNT_ID}-form`} className="max-w-full">
-                <div id={FINCODE_MOUNT_ID} className="min-h-96 border border-sky-200 bg-white p-4" />
+                <div id={FINCODE_MOUNT_ID} className="min-h-96 border border-sky-200 bg-white p-3" />
               </div>
               <LoadingButton type="submit" isLoading={cardSubmitting} loadingLabel="登録中...">
                 カードを追加
               </LoadingButton>
             </form>
           </article>
-        </div>
+        )}
       </section>
 
       <section id="history" className={sectionClass}>
