@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { LoadingButton } from "../components/LoadingButton";
 import { apiFetch, ApiError } from "../lib/apiClient";
@@ -25,6 +26,7 @@ export function SubscriptionPage() {
   const [sub, setSub] = useState<Subscription>(null);
   const [loaded, setLoaded] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<ApiError | Error | null>(null);
 
   async function refresh() {
@@ -42,14 +44,14 @@ export function SubscriptionPage() {
     refresh();
   }, []);
 
-  async function onCancel() {
+  async function confirmCancel() {
     if (!sub) return;
-    if (!confirm("本当に解約しますか？")) return;
     setCancelling(true);
     setError(null);
     try {
       const updated = await apiFetch<Subscription>("/api/subscription", { method: "DELETE" });
       setSub(updated);
+      setConfirmOpen(false);
     } catch (e) {
       setError(e as ApiError);
     } finally {
@@ -100,13 +102,40 @@ export function SubscriptionPage() {
           </dl>
           {sub.status === "active" && (
             <p className="mt-6">
-              <LoadingButton type="button" variant="danger" isLoading={cancelling} loadingLabel="解約中..." onClick={onCancel}>
+              <LoadingButton
+                type="button"
+                variant="danger"
+                isLoading={cancelling}
+                loadingLabel="解約中..."
+                onClick={() => setConfirmOpen(true)}
+              >
                 解約する
               </LoadingButton>
             </p>
           )}
         </article>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="サブスクリプションを解約しますか？"
+        description={
+          sub ? (
+            <>
+              <p>
+                プラン「{sub.plan_name}」（¥{sub.plan_amount.toLocaleString()} / {sub.plan_interval}）を解約します。
+              </p>
+              <p className="mt-2 text-slate-500">解約後は再度プラン選択が必要になります。</p>
+            </>
+          ) : null
+        }
+        confirmLabel="解約する"
+        loadingLabel="解約中..."
+        variant="danger"
+        isConfirming={cancelling}
+        onConfirm={confirmCancel}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </section>
   );
 }
