@@ -25,7 +25,10 @@ export function ErrorBanner({ error }: { error: ApiError | Error | null }) {
   const code = "code" in error ? (error as ApiError).code : "error";
   const label = codeLabels[code] ?? error.message;
   return (
-    <div className="error-banner" role="alert">
+    <div
+      className="flex gap-2 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+      role="alert"
+    >
       <strong>エラー：</strong>
       <span>{label}</span>
     </div>

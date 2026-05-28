@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ErrorBanner } from "../components/ErrorBanner";
+import { LoadingButton } from "../components/LoadingButton";
 import { apiFetch, ApiError } from "../lib/apiClient";
 
 type Plan = {
@@ -19,6 +20,14 @@ type Card = {
   exp_month: number;
   exp_year: number;
 };
+
+const pageClass = "mx-auto grid max-w-5xl gap-6";
+const cardClass = "border border-sky-200 bg-white p-6 shadow-sm shadow-sky-100";
+const labelClass = "grid gap-1.5 text-sm font-semibold text-slate-700";
+const inputClass =
+  "min-h-11 border border-sky-200 bg-white px-3 py-2 text-base font-normal text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200";
+const primaryLinkClass =
+  "inline-flex min-h-11 items-center justify-center border border-sky-600 bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2";
 
 export function PlansPage() {
   const navigate = useNavigate();
@@ -61,26 +70,27 @@ export function PlansPage() {
   }
 
   return (
-    <section className="page">
-      <h1>プラン一覧</h1>
+    <section className={pageClass}>
+      <h1 className="text-3xl font-bold text-sky-950">プラン一覧</h1>
       <ErrorBanner error={error} />
       {!loaded ? (
-        <p>読み込み中...</p>
+        <p className="text-slate-600">読み込み中...</p>
       ) : (
         <>
           {cards.length === 0 ? (
-            <article className="card">
-              <p>契約にはカードが必要です。</p>
-              <p className="actions">
-                <Link to="/cards" className="primary-link">
+            <article className={cardClass}>
+              <p className="text-slate-700">契約にはカードが必要です。</p>
+              <p className="mt-4">
+                <Link to="/cards" className={primaryLinkClass}>
                   カードを登録する
                 </Link>
               </p>
             </article>
           ) : (
-            <label className="field">
+            <label className={labelClass}>
               <span>支払いカード</span>
               <select
+                className={inputClass}
                 value={selectedCardId ?? ""}
                 onChange={(e) => setSelectedCardId(Number(e.target.value))}
               >
@@ -92,22 +102,23 @@ export function PlansPage() {
               </select>
             </label>
           )}
-          <ul className="plan-list">
+          <ul className="grid gap-4">
             {plans.map((plan) => (
-              <li key={plan.fincode_plan_id} className="card plan-card">
-                <h2>{plan.name}</h2>
-                <p className="price">
-                  ¥{plan.amount.toLocaleString()} <span className="muted">/ {plan.interval}</span>
+              <li key={plan.fincode_plan_id} className={`${cardClass} grid gap-3`}>
+                <h2 className="text-xl font-bold text-sky-950">{plan.name}</h2>
+                <p className="text-2xl font-bold text-slate-900">
+                  ¥{plan.amount.toLocaleString()} <span className="text-base font-normal text-slate-500">/ {plan.interval}</span>
                 </p>
-                <button
+                <LoadingButton
                   type="button"
-                  className="primary"
                   disabled={cards.length === 0 || submittingPlan === plan.fincode_plan_id}
+                  isLoading={submittingPlan === plan.fincode_plan_id}
+                  loadingLabel="登録中..."
                   title={cards.length === 0 ? "先にカードを登録してください" : undefined}
                   onClick={() => subscribe(plan.fincode_plan_id)}
                 >
-                  {submittingPlan === plan.fincode_plan_id ? "登録中..." : "このプランを契約"}
-                </button>
+                  このプランを契約
+                </LoadingButton>
               </li>
             ))}
           </ul>

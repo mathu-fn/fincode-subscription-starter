@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { LoadingButton } from "../components/LoadingButton";
 import { useAuth } from "../hooks/useAuth";
 
 export function AccountPage() {
@@ -9,28 +10,29 @@ export function AccountPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   return (
-    <section className="page">
+    <section className="mx-auto grid max-w-5xl gap-6">
       <header>
-        <h1>アカウント</h1>
-        <p className="hint">ログイン情報の確認とログアウトができます。</p>
+        <h1 className="text-3xl font-bold text-sky-950">アカウント</h1>
+        <p className="mt-2 text-sm text-slate-600">ログイン情報の確認とログアウトができます。</p>
       </header>
 
-      <article className="card">
-        <dl className="meta">
-          <div>
-            <dt>名前</dt>
-            <dd>{user?.name ?? "-"}</dd>
+      <article className="border border-sky-200 bg-white p-6 shadow-sm shadow-sky-100">
+        <dl className="grid gap-4 sm:grid-cols-2">
+          <div className="bg-sky-50 p-4">
+            <dt className="text-sm text-slate-500">名前</dt>
+            <dd className="mt-1 font-semibold text-slate-900">{user?.name ?? "-"}</dd>
           </div>
-          <div>
-            <dt>メールアドレス</dt>
-            <dd>{user?.email ?? "-"}</dd>
+          <div className="bg-sky-50 p-4">
+            <dt className="text-sm text-slate-500">メールアドレス</dt>
+            <dd className="mt-1 font-semibold text-slate-900">{user?.email ?? "-"}</dd>
           </div>
         </dl>
-        <div className="actions">
-          <button
+        <div className="mt-6">
+          <LoadingButton
             type="button"
-            className="danger"
-            disabled={isSubmitting}
+            variant="danger"
+            isLoading={isSubmitting}
+            loadingLabel="ログアウト中..."
             onClick={async () => {
               setIsSubmitting(true);
               try {
@@ -41,8 +43,8 @@ export function AccountPage() {
               }
             }}
           >
-            {isSubmitting ? "ログアウト中..." : "ログアウト"}
-          </button>
+            ログアウト
+          </LoadingButton>
         </div>
       </article>
     </section>
