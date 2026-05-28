@@ -8,7 +8,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   if (loading) {
-    return <div className="page">読み込み中...</div>;
+    return <div className="mx-auto grid max-w-5xl gap-6 text-slate-700">読み込み中...</div>;
   }
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location }} />;

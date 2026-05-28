@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { ErrorBanner } from "../components/ErrorBanner";
+import { LoadingButton } from "../components/LoadingButton";
 import { apiFetch, ApiError } from "../lib/apiClient";
 
 type Subscription = {
@@ -14,6 +15,11 @@ type Subscription = {
   current_period_end: string | null;
   created_at: string;
 } | null;
+
+const pageClass = "mx-auto grid max-w-5xl gap-6";
+const cardClass = "border border-sky-200 bg-white p-6 shadow-sm shadow-sky-100";
+const primaryLinkClass =
+  "inline-flex min-h-11 items-center justify-center border border-sky-600 bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2";
 
 export function SubscriptionPage() {
   const [sub, setSub] = useState<Subscription>(null);
@@ -52,51 +58,51 @@ export function SubscriptionPage() {
   }
 
   return (
-    <section className="page">
-      <h1>サブスクリプション詳細</h1>
+    <section className={pageClass}>
+      <h1 className="text-3xl font-bold text-sky-950">サブスクリプション詳細</h1>
       <ErrorBanner error={error} />
       {!loaded ? (
-        <p>読み込み中...</p>
+        <p className="text-slate-600">読み込み中...</p>
       ) : !sub ? (
-        <article className="card">
-          <p>アクティブな契約はありません。</p>
-          <p className="actions">
-            <Link to="/plans" className="primary-link">
+        <article className={cardClass}>
+          <p className="text-slate-700">アクティブな契約はありません。</p>
+          <p className="mt-4">
+            <Link to="/plans" className={primaryLinkClass}>
               プランを選ぶ
             </Link>
           </p>
         </article>
       ) : (
-        <article className="card">
-          <dl className="meta">
-            <div>
-              <dt>プラン</dt>
-              <dd>{sub.plan_name}</dd>
+        <article className={cardClass}>
+          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="bg-sky-50 p-4">
+              <dt className="text-sm text-slate-500">プラン</dt>
+              <dd className="mt-1 font-semibold text-slate-900">{sub.plan_name}</dd>
             </div>
-            <div>
-              <dt>金額</dt>
-              <dd>¥{sub.plan_amount.toLocaleString()} / {sub.plan_interval}</dd>
+            <div className="bg-sky-50 p-4">
+              <dt className="text-sm text-slate-500">金額</dt>
+              <dd className="mt-1 font-semibold text-slate-900">¥{sub.plan_amount.toLocaleString()} / {sub.plan_interval}</dd>
             </div>
-            <div>
-              <dt>状態</dt>
-              <dd>{sub.status}</dd>
+            <div className="bg-sky-50 p-4">
+              <dt className="text-sm text-slate-500">状態</dt>
+              <dd className="mt-1 font-semibold text-slate-900">{sub.status}</dd>
             </div>
-            <div>
-              <dt>契約日</dt>
-              <dd>{new Date(sub.created_at).toLocaleString("ja-JP")}</dd>
+            <div className="bg-sky-50 p-4">
+              <dt className="text-sm text-slate-500">契約日</dt>
+              <dd className="mt-1 font-semibold text-slate-900">{new Date(sub.created_at).toLocaleString("ja-JP")}</dd>
             </div>
             {sub.cancelled_at && (
-              <div>
-                <dt>解約日</dt>
-                <dd>{new Date(sub.cancelled_at).toLocaleString("ja-JP")}</dd>
+              <div className="bg-sky-50 p-4">
+                <dt className="text-sm text-slate-500">解約日</dt>
+                <dd className="mt-1 font-semibold text-slate-900">{new Date(sub.cancelled_at).toLocaleString("ja-JP")}</dd>
               </div>
             )}
           </dl>
           {sub.status === "active" && (
-            <p className="actions">
-              <button type="button" className="danger" disabled={cancelling} onClick={onCancel}>
-                {cancelling ? "解約中..." : "解約する"}
-              </button>
+            <p className="mt-6">
+              <LoadingButton type="button" variant="danger" isLoading={cancelling} loadingLabel="解約中..." onClick={onCancel}>
+                解約する
+              </LoadingButton>
             </p>
           )}
         </article>

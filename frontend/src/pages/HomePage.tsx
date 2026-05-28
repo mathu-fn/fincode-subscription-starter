@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 import { ErrorBanner } from "../components/ErrorBanner";
+import { LoadingButton } from "../components/LoadingButton";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch, ApiError } from "../lib/apiClient";
 import { FincodeUiBundle, initFincodeUi, mountFincodeUi, tokenizeViaUi, unmountFincodeUi } from "../lib/fincodeJs";
@@ -52,6 +53,15 @@ type PaginatedBillingHistory = {
 
 const FINCODE_MOUNT_ID = "fincode-ui-mount";
 const PER_PAGE = 10;
+const pageClass = "mx-auto grid max-w-6xl gap-7";
+const sectionClass = "grid scroll-mt-24 gap-4";
+const cardClass = "border border-sky-200 bg-white p-6 shadow-sm shadow-sky-100";
+const summaryCardClass = "grid min-h-32 gap-2 border border-sky-200 bg-white p-5 shadow-sm shadow-sky-100";
+const labelClass = "grid gap-1.5 text-sm font-semibold text-slate-700";
+const inputClass =
+  "min-h-11 border border-sky-200 bg-white px-3 py-2 text-base font-normal text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200";
+const primaryLinkClass =
+  "inline-flex min-h-11 items-center justify-center border border-sky-600 bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2";
 
 export function HomePage() {
   const { user } = useAuth();
@@ -245,107 +255,120 @@ export function HomePage() {
   const selectedCard = cards.find((c) => c.id === selectedCardId) ?? cards[0] ?? null;
 
   return (
-    <section className="page dashboard-page">
-      <div className="dashboard-header">
+    <section className={pageClass}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="eyebrow">Dashboard</p>
-          <h1>ようこそ、{user?.name} さん</h1>
+          <p className="mb-1 text-xs font-bold uppercase text-sky-700">Dashboard</p>
+          <h1 className="text-3xl font-bold text-sky-950">ようこそ、{user?.name} さん</h1>
         </div>
       </div>
 
       <ErrorBanner error={error} />
 
-      <div className="summary-grid">
-        <article className="summary-card">
-          <span>現在の契約</span>
-          <strong>{!subscriptionLoaded ? "読み込み中..." : sub ? sub.plan_name : "未登録"}</strong>
-          <small>{sub ? `${sub.status} / ¥${sub.plan_amount.toLocaleString()} / ${sub.plan_interval}` : "プランを選択して契約できます"}</small>
+      <div className="grid gap-4 md:grid-cols-3">
+        <article className={summaryCardClass}>
+          <span className="text-sm text-slate-500">現在の契約</span>
+          <strong className="text-2xl font-bold leading-tight text-sky-950">
+            {!subscriptionLoaded ? "読み込み中..." : sub ? sub.plan_name : "未登録"}
+          </strong>
+          <small className="text-sm text-slate-500">
+            {sub ? `${sub.status} / ¥${sub.plan_amount.toLocaleString()} / ${sub.plan_interval}` : "プランを選択して契約できます"}
+          </small>
         </article>
-        <article className="summary-card">
-          <span>登録カード</span>
-          <strong>{plansLoaded ? `${cards.length} 枚` : "読み込み中..."}</strong>
-          <small>{selectedCard ? `${selectedCard.brand} **** ${selectedCard.last4}` : "支払いカードを追加できます"}</small>
+        <article className={summaryCardClass}>
+          <span className="text-sm text-slate-500">登録カード</span>
+          <strong className="text-2xl font-bold leading-tight text-sky-950">
+            {plansLoaded ? `${cards.length} 枚` : "読み込み中..."}
+          </strong>
+          <small className="text-sm text-slate-500">
+            {selectedCard ? `${selectedCard.brand} **** ${selectedCard.last4}` : "支払いカードを追加できます"}
+          </small>
         </article>
-        <article className="summary-card">
-          <span>直近決済</span>
-          <strong>{latestHistory ? `¥${latestHistory.amount.toLocaleString()}` : "履歴なし"}</strong>
-          <small>{latestHistory ? new Date(latestHistory.charged_at).toLocaleString("ja-JP") : "決済後に表示されます"}</small>
+        <article className={summaryCardClass}>
+          <span className="text-sm text-slate-500">直近決済</span>
+          <strong className="text-2xl font-bold leading-tight text-sky-950">
+            {latestHistory ? `¥${latestHistory.amount.toLocaleString()}` : "履歴なし"}
+          </strong>
+          <small className="text-sm text-slate-500">
+            {latestHistory ? new Date(latestHistory.charged_at).toLocaleString("ja-JP") : "決済後に表示されます"}
+          </small>
         </article>
       </div>
 
-      <section id="subscription" className="dashboard-section">
-        <div className="section-heading">
-          <h2>契約</h2>
+      <section id="subscription" className={sectionClass}>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-bold text-sky-950">契約</h2>
         </div>
         {!subscriptionLoaded ? (
-          <p>読み込み中...</p>
+          <p className="text-slate-600">読み込み中...</p>
         ) : !sub ? (
-          <article className="card">
-            <p>アクティブな契約はありません。</p>
-            <p className="actions">
-              <a href="#plans" className="primary-link">
+          <article className={cardClass}>
+            <p className="text-slate-700">アクティブな契約はありません。</p>
+            <p className="mt-4">
+              <a href="#plans" className={primaryLinkClass}>
                 プランを選ぶ
               </a>
             </p>
           </article>
         ) : (
-          <article className="card">
-            <dl className="meta">
-              <div>
-                <dt>プラン</dt>
-                <dd>{sub.plan_name}</dd>
+          <article className={cardClass}>
+            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="bg-sky-50 p-4">
+                <dt className="text-sm text-slate-500">プラン</dt>
+                <dd className="mt-1 font-semibold text-slate-900">{sub.plan_name}</dd>
               </div>
-              <div>
-                <dt>金額</dt>
-                <dd>¥{sub.plan_amount.toLocaleString()} / {sub.plan_interval}</dd>
+              <div className="bg-sky-50 p-4">
+                <dt className="text-sm text-slate-500">金額</dt>
+                <dd className="mt-1 font-semibold text-slate-900">¥{sub.plan_amount.toLocaleString()} / {sub.plan_interval}</dd>
               </div>
-              <div>
-                <dt>状態</dt>
-                <dd>{sub.status}</dd>
+              <div className="bg-sky-50 p-4">
+                <dt className="text-sm text-slate-500">状態</dt>
+                <dd className="mt-1 font-semibold text-slate-900">{sub.status}</dd>
               </div>
-              <div>
-                <dt>契約日</dt>
-                <dd>{new Date(sub.created_at).toLocaleString("ja-JP")}</dd>
+              <div className="bg-sky-50 p-4">
+                <dt className="text-sm text-slate-500">契約日</dt>
+                <dd className="mt-1 font-semibold text-slate-900">{new Date(sub.created_at).toLocaleString("ja-JP")}</dd>
               </div>
               {sub.cancelled_at && (
-                <div>
-                  <dt>解約日</dt>
-                  <dd>{new Date(sub.cancelled_at).toLocaleString("ja-JP")}</dd>
+                <div className="bg-sky-50 p-4">
+                  <dt className="text-sm text-slate-500">解約日</dt>
+                  <dd className="mt-1 font-semibold text-slate-900">{new Date(sub.cancelled_at).toLocaleString("ja-JP")}</dd>
                 </div>
               )}
             </dl>
             {sub.status === "active" && (
-              <p className="actions">
-                <button type="button" className="danger" disabled={cancelling} onClick={onCancel}>
-                  {cancelling ? "解約中..." : "解約する"}
-                </button>
+              <p className="mt-6">
+                <LoadingButton type="button" variant="danger" isLoading={cancelling} loadingLabel="解約中..." onClick={onCancel}>
+                  解約する
+                </LoadingButton>
               </p>
             )}
           </article>
         )}
       </section>
 
-      <section id="plans" className="dashboard-section">
-        <div className="section-heading">
-          <h2>プラン</h2>
+      <section id="plans" className={sectionClass}>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-bold text-sky-950">プラン</h2>
         </div>
         {!plansLoaded ? (
-          <p>読み込み中...</p>
+          <p className="text-slate-600">読み込み中...</p>
         ) : (
           <>
             {cards.length === 0 ? (
-              <article className="card">
-                <p>契約にはカードが必要です。</p>
-                <p className="actions">
-                  <a href="#cards" className="primary-link">
+              <article className={cardClass}>
+                <p className="text-slate-700">契約にはカードが必要です。</p>
+                <p className="mt-4">
+                  <a href="#cards" className={primaryLinkClass}>
                     カードを登録する
                   </a>
                 </p>
               </article>
             ) : (
-              <label className="field">
+              <label className={labelClass}>
                 <span>支払いカード</span>
                 <select
+                  className={inputClass}
                   value={selectedCardId ?? ""}
                   onChange={(e) => setSelectedCardId(Number(e.target.value))}
                 >
@@ -357,22 +380,23 @@ export function HomePage() {
                 </select>
               </label>
             )}
-            <ul className="plan-list">
+            <ul className="grid gap-4">
               {plans.map((plan) => (
-                <li key={plan.fincode_plan_id} className="card plan-card">
-                  <h3>{plan.name}</h3>
-                  <p className="price">
-                    ¥{plan.amount.toLocaleString()} <span className="muted">/ {plan.interval}</span>
+                <li key={plan.fincode_plan_id} className={`${cardClass} grid gap-3`}>
+                  <h3 className="text-lg font-bold text-sky-950">{plan.name}</h3>
+                  <p className="text-2xl font-bold text-slate-900">
+                    ¥{plan.amount.toLocaleString()} <span className="text-base font-normal text-slate-500">/ {plan.interval}</span>
                   </p>
-                  <button
+                  <LoadingButton
                     type="button"
-                    className="primary"
                     disabled={cards.length === 0 || submittingPlan !== null}
+                    isLoading={submittingPlan === plan.fincode_plan_id}
+                    loadingLabel="登録中..."
                     title={cards.length === 0 ? "先にカードを登録してください" : undefined}
                     onClick={() => subscribe(plan.fincode_plan_id)}
                   >
-                    {submittingPlan === plan.fincode_plan_id ? "登録中..." : "このプランを契約"}
-                  </button>
+                    このプランを契約
+                  </LoadingButton>
                 </li>
               ))}
             </ul>
@@ -380,93 +404,106 @@ export function HomePage() {
         )}
       </section>
 
-      <section id="cards" className="dashboard-section">
-        <div className="section-heading">
-          <h2>カード</h2>
+      <section id="cards" className={sectionClass}>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-bold text-sky-950">カード</h2>
         </div>
-        <div className="dashboard-columns">
-          <article className="card">
-            <h3>登録済みカード</h3>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(280px,0.8fr)_minmax(360px,1.2fr)]">
+          <article className={cardClass}>
+            <h3 className="mb-3 text-lg font-bold text-sky-950">登録済みカード</h3>
             {!plansLoaded ? (
-              <p>読み込み中...</p>
+              <p className="text-slate-600">読み込み中...</p>
             ) : cards.length === 0 ? (
-              <p>登録済みのカードはまだありません。</p>
+              <p className="text-slate-700">登録済みのカードはまだありません。</p>
             ) : (
-              <ul className="card-list">
+              <ul className="grid gap-3">
                 {cards.map((card) => (
-                  <li key={card.id}>
-                    <span>
+                  <li key={card.id} className="flex items-center justify-between gap-3 bg-sky-50 px-4 py-3">
+                    <span className="text-sm font-medium text-slate-800">
                       {card.brand} **** {card.last4} ({card.exp_month}/{card.exp_year})
                     </span>
-                    <button
+                    <LoadingButton
                       type="button"
-                      className="danger-link"
+                      variant="ghost"
+                      className="min-h-0 text-red-700 hover:text-red-900 focus:ring-red-500"
                       disabled={deletingCardId !== null}
+                      isLoading={deletingCardId === card.id}
+                      loadingLabel="削除中..."
                       onClick={() => onDeleteCard(card.id)}
                     >
-                      {deletingCardId === card.id ? "削除中..." : "削除"}
-                    </button>
+                      削除
+                    </LoadingButton>
                   </li>
                 ))}
               </ul>
             )}
           </article>
-          <article className="card">
-            <h3>新規カードを追加</h3>
-            <p className="hint">
+          <article className={cardClass}>
+            <h3 className="text-lg font-bold text-sky-950">新規カードを追加</h3>
+            <p className="mt-3 text-sm text-slate-600">
               カード番号と CVC はサーバーへ送信されません。fincode の UI コンポーネントでトークン化されたトークンのみがバックエンドへ送信されます。
             </p>
-            <form onSubmit={onSubmitCard} className="form">
-              <div id={`${FINCODE_MOUNT_ID}-form`} className="fincode-ui-frame">
-                <div id={FINCODE_MOUNT_ID} className="fincode-ui-mount" />
+            <form onSubmit={onSubmitCard} className="mt-4 grid gap-4">
+              <div id={`${FINCODE_MOUNT_ID}-form`} className="max-w-full">
+                <div id={FINCODE_MOUNT_ID} className="min-h-96 border border-sky-200 bg-white p-4" />
               </div>
-              <button type="submit" className="primary" disabled={cardSubmitting}>
-                {cardSubmitting ? "登録中..." : "カードを追加"}
-              </button>
+              <LoadingButton type="submit" isLoading={cardSubmitting} loadingLabel="登録中...">
+                カードを追加
+              </LoadingButton>
             </form>
           </article>
         </div>
       </section>
 
-      <section id="history" className="dashboard-section">
-        <div className="section-heading">
-          <h2>履歴</h2>
+      <section id="history" className={sectionClass}>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-bold text-sky-950">履歴</h2>
         </div>
         {!history ? (
-          <p>読み込み中...</p>
+          <p className="text-slate-600">読み込み中...</p>
         ) : history.data.length === 0 ? (
-          <p>履歴はまだありません。</p>
+          <p className="text-slate-700">履歴はまだありません。</p>
         ) : (
           <>
-            <table className="history-table">
-              <thead>
+            <div className="overflow-x-auto border border-sky-200 bg-white shadow-sm shadow-sky-100">
+              <table className="w-full min-w-[680px] border-collapse text-left">
+                <thead>
                 <tr>
-                  <th>日時</th>
-                  <th>状態</th>
-                  <th>金額</th>
-                  <th>fincode 支払 ID</th>
+                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">日時</th>
+                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">状態</th>
+                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">金額</th>
+                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">fincode 支払 ID</th>
                 </tr>
-              </thead>
-              <tbody>
+                </thead>
+                <tbody>
                 {history.data.map((record) => (
                   <tr key={record.id}>
-                    <td>{new Date(record.charged_at).toLocaleString("ja-JP")}</td>
-                    <td>{record.status}</td>
-                    <td>¥{record.amount.toLocaleString()}</td>
-                    <td className="muted">{record.fincode_payment_id ?? "-"}</td>
+                    <td className="border-b border-sky-100 px-4 py-3 text-sm text-slate-800">
+                      {new Date(record.charged_at).toLocaleString("ja-JP")}
+                    </td>
+                    <td className="border-b border-sky-100 px-4 py-3 text-sm text-slate-800">{record.status}</td>
+                    <td className="border-b border-sky-100 px-4 py-3 text-sm font-semibold text-slate-900">¥{record.amount.toLocaleString()}</td>
+                    <td className="border-b border-sky-100 px-4 py-3 text-sm text-slate-500">{record.fincode_payment_id ?? "-"}</td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-            <div className="pagination">
-              <button type="button" disabled={page === 1} onClick={() => setPage((current) => current - 1)}>
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-center gap-4">
+              <button
+                type="button"
+                className="min-h-10 border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 transition-colors hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={page === 1}
+                onClick={() => setPage((current) => current - 1)}
+              >
                 前へ
               </button>
-              <span>
+              <span className="text-sm font-semibold text-slate-700">
                 {history.page} / {totalPages}
               </span>
               <button
                 type="button"
+                className="min-h-10 border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 transition-colors hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={page >= totalPages}
                 onClick={() => setPage((current) => current + 1)}
               >

@@ -12,9 +12,11 @@
   },
   "dependencies": {
     "@fincode/js": "^1.1.0",
+    "@tailwindcss/vite": "^4.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.0"
+    "react-router-dom": "^6.26.0",
+    "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.5.0",
