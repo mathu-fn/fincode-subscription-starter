@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import get_settings
@@ -35,6 +36,10 @@ def create_app() -> FastAPI:
     )
 
     register_exception_handlers(app)
+
+    Instrumentator(
+        excluded_handlers=["/health", "/metrics"],
+    ).instrument(app).expose(app, include_in_schema=False)
 
     @app.get("/health")
     def healthcheck() -> dict[str, str]:
