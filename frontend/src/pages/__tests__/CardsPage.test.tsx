@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -48,12 +49,18 @@ beforeEach(() => {
 });
 
 describe("HomePage cards section", () => {
-  it("renders the fincode-required wrapper and mounts the card input UI", async () => {
+  it("hides the card form until the user clicks the add-card button, then mounts the fincode UI", async () => {
     render(
       <MemoryRouter>
         <HomePage />
       </MemoryRouter>
     );
+
+    expect(screen.queryByText("新規カードを追加")).not.toBeInTheDocument();
+    expect(document.getElementById("fincode-ui-mount")).not.toBeInTheDocument();
+    expect(mocks.mountFincodeUi).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "カードを追加" }));
 
     expect(screen.getByText("新規カードを追加")).toBeInTheDocument();
     expect(screen.queryByText(/テストトークンを直接入力/)).not.toBeInTheDocument();
@@ -63,5 +70,10 @@ describe("HomePage cards section", () => {
     await waitFor(() => {
       expect(mocks.mountFincodeUi).toHaveBeenCalledWith({}, "fincode-ui-mount");
     });
+
+    await userEvent.click(screen.getByRole("button", { name: "閉じる" }));
+    expect(screen.queryByText("新規カードを追加")).not.toBeInTheDocument();
+    expect(document.getElementById("fincode-ui-mount")).not.toBeInTheDocument();
+    expect(mocks.unmountFincodeUi).toHaveBeenCalled();
   });
 });
