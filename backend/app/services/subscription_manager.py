@@ -19,6 +19,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import SubscriptionStatus
 from app.core.exceptions import (
     ActiveSubscriptionExistsError,
     ExpiredCardError,
@@ -33,7 +34,7 @@ from app.services.audit_logger import AuditLogger
 from app.services.customer_sync_service import CustomerSyncService
 from app.services.fincode.client import FincodeClient
 from app.services.fincode.idempotency import new_nonce
-from app.services.fincode.plan_service import FincodePlanService
+from app.services.fincode.plan_service import FincodePlanService, PlanData
 from app.services.fincode.subscription_service import FincodeSubscriptionService
 
 
@@ -48,13 +49,15 @@ class SubscriptionManager:
     async def get_active(self, db: AsyncSession, user: User) -> Subscription | None:
         stmt = (
             select(Subscription)
-            .where(Subscription.user_id == user.id, Subscription.status == "active")
+            .where(
+                Subscription.user_id == user.id, Subscription.status == SubscriptionStatus.ACTIVE
+            )
             .order_by(desc(Subscription.created_at))
             .limit(1)
         )
         return (await db.execute(stmt)).scalar_one_or_none()
 
-    async def list_plans(self) -> list[dict]:
+    async def list_plans(self) -> list[PlanData]:
         return await self._plans.list_active()
 
     async def subscribe(
@@ -76,7 +79,7 @@ class SubscriptionManager:
                 select(Subscription).where(
                     Subscription.user_id == user.id,
                     Subscription.nonce == idempotency_key,
-                    Subscription.status == "active",
+                    Subscription.status == SubscriptionStatus.ACTIVE,
                 )
             )
             if prior is not None:
@@ -117,8 +120,8 @@ class SubscriptionManager:
             plan_name=plan["name"],
             plan_amount=plan["amount"],
             plan_interval=plan["interval"],
-            plan_snapshot=plan.get("raw"),
-            status="active",
+            plan_snapshot=plan["raw"],
+            status=SubscriptionStatus.ACTIVE,
         )
         db.add(sub)
         try:
@@ -168,13 +171,13 @@ class SubscriptionManager:
             raise SubscriptionNotFoundError()
         if sub.fincode_subscription_id is None:
             # ローカルのみの行; ステータスを反転するだけ。
-            sub.status = "cancelled"
+            sub.status = SubscriptionStatus.CANCELLED
             sub.cancelled_at = datetime.now(timezone.utc)
             await db.flush()
             return sub
 
         await self._subs.cancel(fincode_subscription_id=sub.fincode_subscription_id)
-        sub.status = "cancelled"
+        sub.status = SubscriptionStatus.CANCELLED
         sub.cancelled_at = datetime.now(timezone.utc)
         await db.flush()
 
@@ -184,8 +187,11 @@ class SubscriptionManager:
             event="subscription.cancel",
             auditable_type="subscription",
             auditable_id=sub.id,
-            before={"status": "active"},
-            after={"status": "cancelled", "cancelled_at": sub.cancelled_at.isoformat()},
+            before={"status": SubscriptionStatus.ACTIVE},
+            after={
+                "status": SubscriptionStatus.CANCELLED,
+                "cancelled_at": sub.cancelled_at.isoformat(),
+            },
         )
         return sub
 
@@ -204,9 +210,9 @@ class SubscriptionManager:
 
         total = (
             await db.scalar(
-                select(func.count()).select_from(SubscriptionResult).where(
-                    SubscriptionResult.subscription_id.in_(sub_ids)
-                )
+                select(func.count())
+                .select_from(SubscriptionResult)
+                .where(SubscriptionResult.subscription_id.in_(sub_ids))
             )
         ) or 0
 

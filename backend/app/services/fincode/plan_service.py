@@ -7,9 +7,26 @@
 from __future__ import annotations
 
 import time
+from typing import Any, TypedDict
 
 from app.core.exceptions import PlanUnavailableError
 from app.services.fincode.client import FincodeClient
+
+
+class PlanData(TypedDict):
+    """``_normalise`` が返す、fincode プランの正規化済み内部表現。
+
+    fincode の生レスポンス（``raw``）と、UI / 契約スナップショットが参照する
+    フラットなフィールドを併せ持つ。``raw`` は ``subscriptions.plan_snapshot``
+    に凍結保存される。
+    """
+
+    fincode_plan_id: str
+    name: str
+    amount: int
+    currency: str
+    interval: str
+    raw: dict[str, Any]
 
 
 class FincodePlanService:
@@ -17,8 +34,8 @@ class FincodePlanService:
 
     def __init__(self, client: FincodeClient) -> None:
         self._client = client
-        self._list_cache: tuple[float, list[dict]] | None = None
-        self._plan_cache: dict[str, tuple[float, dict]] = {}
+        self._list_cache: tuple[float, list[PlanData]] | None = None
+        self._plan_cache: dict[str, tuple[float, PlanData]] = {}
 
     @staticmethod
     def _is_active(raw: dict) -> bool:
@@ -27,14 +44,14 @@ class FincodePlanService:
         return str(raw.get("delete_flag", "0")) != "1"
 
     @staticmethod
-    def _normalise(raw: dict) -> dict:
+    def _normalise(raw: dict) -> PlanData:
         amount = raw.get("amount", "0")
         try:
             amount_int = int(amount)
         except (TypeError, ValueError):
             amount_int = 0
         return {
-            "fincode_plan_id": raw.get("id"),
+            "fincode_plan_id": raw.get("id", ""),
             "name": raw.get("plan_name") or raw.get("name") or "",
             "amount": amount_int,
             "currency": raw.get("currency", "JPY"),
@@ -42,7 +59,7 @@ class FincodePlanService:
             "raw": raw,
         }
 
-    async def list_active(self) -> list[dict]:
+    async def list_active(self) -> list[PlanData]:
         now = time.monotonic()
         if self._list_cache and (now - self._list_cache[0]) < self._cache_ttl:
             return self._list_cache[1]
@@ -52,7 +69,7 @@ class FincodePlanService:
         self._list_cache = (now, result)
         return result
 
-    async def fetch(self, plan_id: str) -> dict:
+    async def fetch(self, plan_id: str) -> PlanData:
         now = time.monotonic()
         cached = self._plan_cache.get(plan_id)
         if cached and (now - cached[0]) < self._cache_ttl:
