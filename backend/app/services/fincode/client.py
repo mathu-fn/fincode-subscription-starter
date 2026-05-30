@@ -102,7 +102,11 @@ class FincodeHttpClient:
 
                 if status == 429:
                     retry_after_raw = response.headers.get("Retry-After")
-                    retry_after = int(retry_after_raw) if retry_after_raw and retry_after_raw.isdigit() else None
+                    retry_after = (
+                        int(retry_after_raw)
+                        if retry_after_raw and retry_after_raw.isdigit()
+                        else None
+                    )
                     # docs/architecture/error-handling.md の仕様通り、429 はブレーカーを反転させない。
                     raise FincodeRateLimitError(retry_after=retry_after)
 
@@ -117,12 +121,3 @@ class FincodeHttpClient:
 
         assert last_exc is not None
         raise last_exc
-
-    async def get(self, path: str) -> dict[str, Any]:
-        return await self.request("GET", path)
-
-    async def post(self, path: str, json: dict, *, idempotency_key: str | None = None) -> dict[str, Any]:
-        return await self.request("POST", path, json=json, idempotency_key=idempotency_key)
-
-    async def delete(self, path: str) -> dict[str, Any]:
-        return await self.request("DELETE", path)

@@ -22,6 +22,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import PaymentStatus, SubscriptionStatus
 from app.core.exceptions import WebhookSignatureError
 from app.core.logging import get_logger
 from app.models.subscription import Subscription
@@ -74,7 +75,12 @@ class FincodeWebhookHandler:
             await db.rollback()
             return
 
-        if event_type in {"payment.succeeded", "payment.failed", "subscription.payment.succeeded", "subscription.payment.failed"}:
+        if event_type in {
+            "payment.succeeded",
+            "payment.failed",
+            "subscription.payment.succeeded",
+            "subscription.payment.failed",
+        }:
             await self._handle_payment(body, db, seen)
         elif event_type in {"subscription.canceled", "subscription.cancelled"}:
             await self._handle_cancellation(body, db)
@@ -104,7 +110,11 @@ class FincodeWebhookHandler:
         except (TypeError, ValueError):
             amount = 0
 
-        status_value = data.get("status") or ("succeeded" if "succeeded" in (body.get("event") or "") else "failed")
+        status_value = data.get("status") or (
+            PaymentStatus.SUCCEEDED
+            if "succeeded" in (body.get("event") or "")
+            else PaymentStatus.FAILED
+        )
         charged_at = _parse_charged_at(data.get("charged_at") or data.get("process_date"))
 
         stmt = (
@@ -120,13 +130,18 @@ class FincodeWebhookHandler:
             )
             .on_conflict_do_update(
                 constraint="uq_subscription_results_sub_payment",
-                set_={"status": status_value, "amount": amount, "charged_at": charged_at, "fincode_response": data},
+                set_={
+                    "status": status_value,
+                    "amount": amount,
+                    "charged_at": charged_at,
+                    "fincode_response": data,
+                },
             )
         )
         await db.execute(stmt)
 
-        if status_value in {"failed", "unpaid"}:
-            sub.status = "unpaid"
+        if status_value in {PaymentStatus.FAILED, SubscriptionStatus.UNPAID}:
+            sub.status = SubscriptionStatus.UNPAID
 
         await self._audit.record(
             db,
@@ -147,8 +162,8 @@ class FincodeWebhookHandler:
         )
         if sub is None:
             return
-        if sub.status != "cancelled":
-            sub.status = "cancelled"
+        if sub.status != SubscriptionStatus.CANCELLED:
+            sub.status = SubscriptionStatus.CANCELLED
             sub.cancelled_at = datetime.now(timezone.utc)
         await self._audit.record(
             db,
@@ -156,5 +171,5 @@ class FincodeWebhookHandler:
             event="webhook.subscription_cancelled",
             auditable_type="subscription",
             auditable_id=sub.id,
-            after={"status": "cancelled"},
+            after={"status": SubscriptionStatus.CANCELLED},
         )

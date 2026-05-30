@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import SubscriptionStatus
 from app.core.exceptions import CardInUseError, CardNotFoundError, OwnershipError
 from app.models.fincode_card import FincodeCard
 from app.models.fincode_customer import FincodeCustomer
@@ -99,7 +100,7 @@ class CardManager:
         active = await db.execute(
             select(Subscription).where(
                 Subscription.fincode_card_id == card.id,
-                Subscription.status == "active",
+                Subscription.status == SubscriptionStatus.ACTIVE,
             )
         )
         if active.scalars().first() is not None:

@@ -6,13 +6,17 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
 import jwt
-from fastapi import Depends, Header, HTTPException, status
-from sqlalchemy import select
+from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.db import get_db
-from app.core.exceptions import InvalidCredentialsError
+from app.core.exceptions import (
+    InvalidCredentialsError,
+    InvalidTokenError,
+    TokenExpiredError,
+    UnauthenticatedError,
+)
 from app.core.security import decode_token
 from app.services.audit_logger import AuditLogger, get_audit_logger
 
@@ -28,10 +32,10 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 def _extract_bearer(authorization: str | None) -> str:
     if not authorization:
-        raise HTTPException(status_code=401, detail={"code": "unauthenticated", "message": "Missing Authorization header."})
+        raise UnauthenticatedError("Missing Authorization header.")
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token:
-        raise HTTPException(status_code=401, detail={"code": "unauthenticated", "message": "Invalid Authorization header."})
+        raise UnauthenticatedError("Invalid Authorization header.")
     return token
 
 
@@ -45,9 +49,9 @@ async def get_current_user(
     try:
         payload = decode_token(token)
     except jwt.ExpiredSignatureError as e:
-        raise HTTPException(status_code=401, detail={"code": "token_expired", "message": "Token expired."}) from e
+        raise TokenExpiredError() from e
     except jwt.InvalidTokenError as e:
-        raise HTTPException(status_code=401, detail={"code": "invalid_token", "message": "Invalid token."}) from e
+        raise InvalidTokenError() from e
 
     user_id_raw = payload.get("sub")
     if not user_id_raw:
@@ -59,7 +63,7 @@ async def get_current_user(
 
     user = await db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=401, detail={"code": "unauthenticated", "message": "User not found."})
+        raise UnauthenticatedError("User not found.")
     return user
 
 
