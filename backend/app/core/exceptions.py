@@ -109,6 +109,24 @@ class InvalidCredentialsError(AppError):
     default_message = "Invalid email or password."
 
 
+class UnauthenticatedError(AppError):
+    code = "unauthenticated"
+    http_status = 401
+    default_message = "Authentication is required."
+
+
+class TokenExpiredError(AppError):
+    code = "token_expired"
+    http_status = 401
+    default_message = "Token expired."
+
+
+class InvalidTokenError(AppError):
+    code = "invalid_token"
+    http_status = 401
+    default_message = "Invalid token."
+
+
 class EmailAlreadyRegisteredError(AppError):
     code = "email_already_registered"
     http_status = 409
