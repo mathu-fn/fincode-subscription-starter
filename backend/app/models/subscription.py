@@ -15,11 +15,12 @@ class Subscription(Base):
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id"), nullable=False, index=True
     )
-    fincode_customer_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("fincode_customers.id"), nullable=False
+    # フリープラン（0円・ローカル完結）はカード/顧客を持たないため NULL 許容。
+    fincode_customer_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("fincode_customers.id"), nullable=True
     )
-    fincode_card_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("fincode_cards.id"), nullable=False
+    fincode_card_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("fincode_cards.id"), nullable=True
     )
     fincode_subscription_id: Mapped[str | None] = mapped_column(
         String(128), unique=True, nullable=True

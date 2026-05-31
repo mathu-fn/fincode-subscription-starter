@@ -53,6 +53,13 @@ type PaginatedBillingHistory = {
 
 const FINCODE_MOUNT_ID = "fincode-ui-mount";
 const PER_PAGE = 10;
+// 0円フリープランの番兵ID（バックエンドの FREE_PLAN_ID と一致）。
+const FREE_PLAN_ID = "free";
+
+function formatPlanPrice(amount: number, interval: string): string {
+  if (amount === 0) return "無料";
+  return `¥${amount.toLocaleString()} / ${interval}`;
+}
 const pageClass = "mx-auto grid max-w-5xl gap-5";
 const sectionClass = "grid scroll-mt-24 gap-3";
 const cardClass = "border border-sky-200 bg-white p-4 shadow-sm shadow-sky-100";
@@ -179,7 +186,8 @@ export function HomePage() {
   }, [showCardForm]);
 
   async function subscribe(planId: string) {
-    if (!selectedCardId) {
+    const isFree = planId === FREE_PLAN_ID;
+    if (!isFree && !selectedCardId) {
       setError(new Error("カードを選択してください。"));
       return;
     }
@@ -188,7 +196,10 @@ export function HomePage() {
     try {
       await apiFetch("/api/subscription", {
         method: "POST",
-        body: JSON.stringify({ fincode_plan_id: planId, card_id: selectedCardId })
+        body: JSON.stringify({
+          fincode_plan_id: planId,
+          ...(isFree ? {} : { card_id: selectedCardId })
+        })
       });
       const wasOnPageOne = page === 1;
       setPage(1);
@@ -281,7 +292,7 @@ export function HomePage() {
             {!subscriptionLoaded ? "読み込み中..." : sub ? sub.plan_name : "未登録"}
           </strong>
           <small className="text-sm text-slate-500">
-            {sub ? `${sub.status} / ¥${sub.plan_amount.toLocaleString()} / ${sub.plan_interval}` : "プランを選択して契約できます"}
+            {sub ? `${sub.status} / ${formatPlanPrice(sub.plan_amount, sub.plan_interval)}` : "プランを選択して契約できます"}
           </small>
         </article>
         <article className={summaryCardClass}>
@@ -328,7 +339,7 @@ export function HomePage() {
               </div>
               <div className="bg-sky-50 p-4">
                 <dt className="text-sm text-slate-500">金額</dt>
-                <dd className="mt-1 font-semibold text-slate-900">¥{sub.plan_amount.toLocaleString()} / {sub.plan_interval}</dd>
+                <dd className="mt-1 font-semibold text-slate-900">{formatPlanPrice(sub.plan_amount, sub.plan_interval)}</dd>
               </div>
               <div className="bg-sky-50 p-4">
                 <dt className="text-sm text-slate-500">状態</dt>
@@ -366,7 +377,7 @@ export function HomePage() {
           <>
             {cards.length === 0 ? (
               <article className={cardClass}>
-                <p className="text-slate-700">契約にはカードが必要です。</p>
+                <p className="text-slate-700">有料プランの契約にはカードが必要です。フリープランはカード無しで契約できます。</p>
                 <p className="mt-4">
                   <a href="#cards" className={primaryLinkClass}>
                     カードを登録する
@@ -394,14 +405,20 @@ export function HomePage() {
                 <li key={plan.fincode_plan_id} className={`${cardClass} grid content-start gap-2`}>
                   <h3 className="text-lg font-bold text-sky-950">{plan.name}</h3>
                   <p className="text-2xl font-bold text-slate-900">
-                    ¥{plan.amount.toLocaleString()} <span className="text-base font-normal text-slate-500">/ {plan.interval}</span>
+                    {plan.amount === 0 ? (
+                      "無料"
+                    ) : (
+                      <>
+                        ¥{plan.amount.toLocaleString()} <span className="text-base font-normal text-slate-500">/ {plan.interval}</span>
+                      </>
+                    )}
                   </p>
                   <LoadingButton
                     type="button"
-                    disabled={cards.length === 0 || submittingPlan !== null}
+                    disabled={(plan.amount > 0 && cards.length === 0) || submittingPlan !== null}
                     isLoading={submittingPlan === plan.fincode_plan_id}
                     loadingLabel="登録中..."
-                    title={cards.length === 0 ? "先にカードを登録してください" : undefined}
+                    title={plan.amount > 0 && cards.length === 0 ? "先にカードを登録してください" : undefined}
                     onClick={() => subscribe(plan.fincode_plan_id)}
                   >
                     このプランを契約
