@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from app.core.error_codes import ERROR_DEFAULTS
+
 
 class AppError(Exception):
     """安定した API レスポンスに変換されるアプリケーションエラーの基底クラス。"""
@@ -16,9 +18,12 @@ class AppError(Exception):
     http_status: int = 400
     default_message: str = "An application error occurred."
 
-    def __init__(self, message: str | None = None) -> None:
-        super().__init__(message or self.default_message)
-        self.message = message or self.default_message
+    def __init__(self, message: str | None = None, *, code: str | None = None) -> None:
+        if code is not None:
+            self.code = code
+        resolved = message or ERROR_DEFAULTS.get(self.code, self.default_message)
+        super().__init__(resolved)
+        self.message = resolved
 
 
 # ---- Fincode integration errors -----------------------------------------
@@ -58,88 +63,34 @@ class CircuitBreakerOpenError(FincodeApiError):
     default_message = "The payment service is temporarily unavailable."
 
 
-# ---- Business rule errors -----------------------------------------------
+# ---- Generic error categories -------------------------------------------
 
 
-class ActiveSubscriptionExistsError(AppError):
-    code = "active_subscription_exists"
-    http_status = 409
-    default_message = "An active subscription already exists for this user."
-
-
-class CardInUseError(AppError):
-    code = "card_in_use"
-    http_status = 409
-    default_message = "The card is referenced by an active subscription."
-
-
-class CardNotFoundError(AppError):
-    code = "card_not_found"
+class NotFoundError(AppError):
+    code = "not_found"
     http_status = 404
-    default_message = "The card does not exist."
+    default_message = "The requested resource was not found."
 
 
-class ExpiredCardError(AppError):
-    code = "expired_card"
+class ConflictError(AppError):
+    code = "conflict"
+    http_status = 409
+    default_message = "The request conflicts with the current state."
+
+
+class UnprocessableError(AppError):
+    code = "unprocessable"
     http_status = 422
-    default_message = "The card has expired."
+    default_message = "The request could not be processed."
 
 
-class CardRequiredError(AppError):
-    code = "card_required"
-    http_status = 422
-    default_message = "A card is required to subscribe to a paid plan."
-
-
-class PlanUnavailableError(AppError):
-    code = "plan_unavailable"
-    http_status = 422
-    default_message = "The selected plan is unavailable."
-
-
-class SubscriptionNotFoundError(AppError):
-    code = "subscription_not_found"
-    http_status = 404
-    default_message = "No active subscription was found."
-
-
-class OwnershipError(AppError):
+class ForbiddenError(AppError):
     code = "forbidden"
     http_status = 403
     default_message = "You cannot access this resource."
-
-
-class InvalidCredentialsError(AppError):
-    code = "invalid_credentials"
-    http_status = 401
-    default_message = "Invalid email or password."
 
 
 class UnauthenticatedError(AppError):
     code = "unauthenticated"
     http_status = 401
     default_message = "Authentication is required."
-
-
-class TokenExpiredError(AppError):
-    code = "token_expired"
-    http_status = 401
-    default_message = "Token expired."
-
-
-class InvalidTokenError(AppError):
-    code = "invalid_token"
-    http_status = 401
-    default_message = "Invalid token."
-
-
-class EmailAlreadyRegisteredError(AppError):
-    code = "email_already_registered"
-    http_status = 409
-    default_message = "This email is already registered."
-
-
-class WebhookSignatureError(AppError):
-    code = "invalid_webhook_signature"
-    http_status = 401
-    default_message = "Webhook signature verification failed."

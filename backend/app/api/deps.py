@@ -11,12 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.db import get_db
-from app.core.exceptions import (
-    InvalidCredentialsError,
-    InvalidTokenError,
-    TokenExpiredError,
-    UnauthenticatedError,
-)
+from app.core.exceptions import UnauthenticatedError
 from app.core.security import decode_token
 from app.services.audit_logger import AuditLogger, get_audit_logger
 
@@ -49,17 +44,17 @@ async def get_current_user(
     try:
         payload = decode_token(token)
     except jwt.ExpiredSignatureError as e:
-        raise TokenExpiredError() from e
+        raise UnauthenticatedError(code="token_expired") from e
     except jwt.InvalidTokenError as e:
-        raise InvalidTokenError() from e
+        raise UnauthenticatedError(code="invalid_token") from e
 
     user_id_raw = payload.get("sub")
     if not user_id_raw:
-        raise InvalidCredentialsError("Invalid token subject.")
+        raise UnauthenticatedError("Invalid token subject.", code="invalid_credentials")
     try:
         user_id = int(user_id_raw)
     except (TypeError, ValueError) as e:
-        raise InvalidCredentialsError("Invalid token subject.") from e
+        raise UnauthenticatedError("Invalid token subject.", code="invalid_credentials") from e
 
     user = await db.get(User, user_id)
     if user is None:

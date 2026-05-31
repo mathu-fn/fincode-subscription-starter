@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import SubscriptionStatus
-from app.core.exceptions import CardInUseError, CardNotFoundError, OwnershipError
+from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.fincode_card import FincodeCard
 from app.models.fincode_customer import FincodeCustomer
 from app.models.subscription import Subscription
@@ -93,9 +93,9 @@ class CardManager:
     async def delete_card(self, db: AsyncSession, user: User, card_id: int) -> None:
         card = await db.get(FincodeCard, card_id)
         if card is None or card.deleted_at is not None:
-            raise CardNotFoundError()
+            raise NotFoundError(code="card_not_found")
         if card.user_id != user.id:
-            raise OwnershipError()
+            raise ForbiddenError()
 
         active = await db.execute(
             select(Subscription).where(
@@ -104,11 +104,11 @@ class CardManager:
             )
         )
         if active.scalars().first() is not None:
-            raise CardInUseError()
+            raise ConflictError(code="card_in_use")
 
         customer = await db.get(FincodeCustomer, card.fincode_customer_id)
         if customer is None:
-            raise CardNotFoundError()
+            raise NotFoundError(code="card_not_found")
 
         await self._card_service.delete(
             customer_id=customer.fincode_customer_id,

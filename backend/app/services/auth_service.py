@@ -3,10 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import (
-    EmailAlreadyRegisteredError,
-    InvalidCredentialsError,
-)
+from app.core.exceptions import ConflictError, UnauthenticatedError
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
 from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserOut
@@ -15,7 +12,7 @@ from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserOu
 async def register(db: AsyncSession, payload: RegisterRequest) -> User:
     existing = await db.scalar(select(User).where(User.email == payload.email))
     if existing is not None:
-        raise EmailAlreadyRegisteredError()
+        raise ConflictError(code="email_already_registered")
 
     user = User(
         email=payload.email,
@@ -30,7 +27,7 @@ async def register(db: AsyncSession, payload: RegisterRequest) -> User:
 async def authenticate(db: AsyncSession, payload: LoginRequest) -> User:
     user = await db.scalar(select(User).where(User.email == payload.email))
     if user is None or not verify_password(payload.password, user.password_hash):
-        raise InvalidCredentialsError()
+        raise UnauthenticatedError(code="invalid_credentials")
     return user
 
 
