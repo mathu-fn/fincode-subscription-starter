@@ -7,29 +7,33 @@
 ```mermaid
 classDiagram
     class Exception
+    class AppError
     class FincodeApiError
     class FincodeRateLimitError
     class FincodeServerError
     class FincodeTimeoutError
     class CircuitBreakerOpenError
-    class ActiveSubscriptionExistsError
-    class CardInUseError
-    class ExpiredCardError
-    class PlanUnavailableError
+    class NotFoundError
+    class ConflictError
+    class UnprocessableError
+    class ForbiddenError
+    class UnauthenticatedError
 
-    Exception <|-- FincodeApiError
+    Exception <|-- AppError
+    AppError <|-- FincodeApiError
     FincodeApiError <|-- FincodeRateLimitError
     FincodeApiError <|-- FincodeServerError
     FincodeApiError <|-- FincodeTimeoutError
     FincodeApiError <|-- CircuitBreakerOpenError
-    Exception <|-- ActiveSubscriptionExistsError
-    Exception <|-- CardInUseError
-    Exception <|-- ExpiredCardError
-    Exception <|-- PlanUnavailableError
+    AppError <|-- NotFoundError
+    AppError <|-- ConflictError
+    AppError <|-- UnprocessableError
+    AppError <|-- ForbiddenError
+    AppError <|-- UnauthenticatedError
 ```
 
 - `FincodeApiError` 系は、fincode または通信が原因の失敗。
-- 業務例外は、ローカルの不変条件に違反したときに使う。fincode から返ってきた生のレスポンスはクライアントへ返さない。
+- それ以外の業務エラーは、汎用カテゴリ（`NotFoundError` / `ConflictError` / `UnprocessableError` / `ForbiddenError` / `UnauthenticatedError`）で表す。個々の業務上の意味は、送出時に `code` 引数を渡して区別する（例: `ConflictError(code="active_subscription_exists")`）。fincode から返ってきた生のレスポンスはクライアントへ返さない。
 
 ## HTTPマッピング
 
@@ -40,10 +44,10 @@ classDiagram
 | `FincodeTimeoutError` | 504 | 決済サービスへの接続タイムアウト |
 | `FincodeServerError` | 503 | 決済サービス側エラー |
 | その他 `FincodeApiError` | 502/503 | 決済通信失敗 |
-| `ActiveSubscriptionExistsError` | 409 | 既にアクティブ契約あり |
-| `CardInUseError` | 409 | アクティブ契約が参照中のカード |
-| `ExpiredCardError` | 422 | 有効期限切れカード |
-| `PlanUnavailableError` | 422 | 利用できないプラン |
+| `ConflictError(code=active_subscription_exists)` | 409 | 既にアクティブ契約あり |
+| `ConflictError(code=card_in_use)` | 409 | アクティブ契約が参照中のカード |
+| `UnprocessableError(code=expired_card)` | 422 | 有効期限切れカード |
+| `UnprocessableError(code=plan_unavailable)` | 422 | 利用できないプラン |
 
 FastAPI の例外ハンドラは次の形を返します。
 
