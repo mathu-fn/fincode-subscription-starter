@@ -9,7 +9,8 @@ from __future__ import annotations
 import time
 from typing import Any, TypedDict
 
-from app.core.exceptions import PlanUnavailableError
+from app.core.exceptions import UnprocessableError
+from app.services.fincode.base import BaseFincodeService
 from app.services.fincode.client import FincodeClient
 
 
@@ -29,11 +30,11 @@ class PlanData(TypedDict):
     raw: dict[str, Any]
 
 
-class FincodePlanService:
+class FincodePlanService(BaseFincodeService):
     _cache_ttl = 60.0
 
     def __init__(self, client: FincodeClient) -> None:
-        self._client = client
+        super().__init__(client)
         self._list_cache: tuple[float, list[PlanData]] | None = None
         self._plan_cache: dict[str, tuple[float, PlanData]] = {}
 
@@ -77,9 +78,9 @@ class FincodePlanService:
         try:
             raw = await self._client.request("GET", f"/v1/plans/{plan_id}")
         except Exception as e:
-            raise PlanUnavailableError(f"Plan {plan_id} is not available.") from e
+            raise UnprocessableError(f"Plan {plan_id} is not available.", code="plan_unavailable") from e
         if not self._is_active(raw):
-            raise PlanUnavailableError(f"Plan {plan_id} is not active.")
+            raise UnprocessableError(f"Plan {plan_id} is not active.", code="plan_unavailable")
         normalised = self._normalise(raw)
         self._plan_cache[plan_id] = (now, normalised)
         return normalised

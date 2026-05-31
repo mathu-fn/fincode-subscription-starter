@@ -7,49 +7,8 @@ import { LoadingButton } from "../components/LoadingButton";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch, ApiError } from "../lib/apiClient";
 import { FincodeUiBundle, initFincodeUi, mountFincodeUi, tokenizeViaUi, unmountFincodeUi } from "../lib/fincodeJs";
-
-type Subscription = {
-  id: number;
-  status: string;
-  plan_name: string;
-  plan_amount: number;
-  plan_interval: string;
-  cancelled_at: string | null;
-  current_period_end: string | null;
-  created_at: string;
-} | null;
-
-type Plan = {
-  fincode_plan_id: string;
-  name: string;
-  amount: number;
-  currency: string;
-  interval: string;
-};
-
-type Card = {
-  id: number;
-  brand: string;
-  last4: string;
-  exp_month: number;
-  exp_year: number;
-  created_at: string;
-};
-
-type HistoryItem = {
-  id: number;
-  status: string;
-  amount: number;
-  fincode_payment_id: string | null;
-  charged_at: string;
-};
-
-type PaginatedBillingHistory = {
-  data: HistoryItem[];
-  page: number;
-  per_page: number;
-  total: number;
-};
+import { inputClass, labelClass, pageClass, primaryLinkClass, sectionClass, summaryCardClass } from "../lib/styles";
+import type { Subscription, Plan, Card, HistoryItem, PaginatedBillingHistory } from "../types/api";
 
 const FINCODE_MOUNT_ID = "fincode-ui-mount";
 const PER_PAGE = 10;
@@ -60,15 +19,7 @@ function formatPlanPrice(amount: number, interval: string): string {
   if (amount === 0) return "無料";
   return `¥${amount.toLocaleString()} / ${interval}`;
 }
-const pageClass = "mx-auto grid max-w-5xl gap-5";
-const sectionClass = "grid scroll-mt-24 gap-3";
 const cardClass = "border border-sky-200 bg-white p-4 shadow-sm shadow-sky-100";
-const summaryCardClass = "grid min-h-28 gap-1.5 border border-sky-200 bg-white p-4 shadow-sm shadow-sky-100";
-const labelClass = "grid gap-1.5 text-sm font-semibold text-slate-700";
-const inputClass =
-  "min-h-11 border border-sky-200 bg-white px-3 py-2 text-base font-normal text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200";
-const primaryLinkClass =
-  "inline-flex min-h-11 items-center justify-center border border-sky-600 bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2";
 
 export function HomePage() {
   const { user } = useAuth();

@@ -14,13 +14,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import SubscriptionStatus
-from app.core.exceptions import CardInUseError, CardNotFoundError, OwnershipError
+from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.fincode_card import FincodeCard
 from app.models.fincode_customer import FincodeCustomer
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.audit_logger import AuditLogger
-from app.services.customer_sync_service import CustomerSyncService
+from app.services.base_manager import BaseManager
 from app.services.fincode.card_service import FincodeCardService
 from app.services.fincode.client import FincodeClient
 
@@ -38,12 +38,14 @@ def _parse_expire(expire: str | None) -> tuple[int, int]:
         return 1, 1970
 
 
-class CardManager:
+class CardManager(BaseManager):
     def __init__(self, client: FincodeClient, audit: AuditLogger | None = None) -> None:
-        self._client = client
+        super().__init__(client, audit)
         self._card_service = FincodeCardService(client)
-        self._customers = CustomerSyncService(client)
-        self._audit = audit or AuditLogger()
+
+    @property
+    def auditable_type(self) -> str:
+        return "fincode_card"
 
     async def list_cards(self, db: AsyncSession, user: User) -> list[FincodeCard]:
         stmt = (
@@ -84,7 +86,7 @@ class CardManager:
             db,
             user_id=user.id,
             event="card.create",
-            auditable_type="fincode_card",
+            auditable_type=self.auditable_type,
             auditable_id=card.id,
             after={"brand": card.brand, "last4": card.last4},
         )
@@ -93,9 +95,9 @@ class CardManager:
     async def delete_card(self, db: AsyncSession, user: User, card_id: int) -> None:
         card = await db.get(FincodeCard, card_id)
         if card is None or card.deleted_at is not None:
-            raise CardNotFoundError()
+            raise NotFoundError(code="card_not_found")
         if card.user_id != user.id:
-            raise OwnershipError()
+            raise ForbiddenError()
 
         active = await db.execute(
             select(Subscription).where(
@@ -104,11 +106,11 @@ class CardManager:
             )
         )
         if active.scalars().first() is not None:
-            raise CardInUseError()
+            raise ConflictError(code="card_in_use")
 
         customer = await db.get(FincodeCustomer, card.fincode_customer_id)
         if customer is None:
-            raise CardNotFoundError()
+            raise NotFoundError(code="card_not_found")
 
         await self._card_service.delete(
             customer_id=customer.fincode_customer_id,
@@ -120,7 +122,7 @@ class CardManager:
             db,
             user_id=user.id,
             event="card.delete",
-            auditable_type="fincode_card",
+            auditable_type=self.auditable_type,
             auditable_id=card.id,
             before={"brand": card.brand, "last4": card.last4},
             after={"deleted_at": card.deleted_at.isoformat()},

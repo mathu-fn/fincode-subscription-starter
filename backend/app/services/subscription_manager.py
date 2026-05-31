@@ -3,7 +3,7 @@
 1ユーザー1アクティブ契約の不変条件は、partial unique index
 （``WHERE status = 'active'``）によって DB 層で強制される。これにより同時リクエストが
 両方とも成功することはない。このサービスは一般ケースがインデックスをヒットしないよう
-``ActiveSubscriptionExistsError`` を最初の協調的なガードとして発生させるが、
+``ConflictError`` を最初の協調的なガードとして発生させるが、
 インデックスこそがガードをレースセーフにしている。
 
 キャンセルは同期的: ローカル行の ``status`` を即座に ``'cancelled'`` に反転させる。
@@ -21,11 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import SubscriptionStatus
 from app.core.exceptions import (
-    ActiveSubscriptionExistsError,
-    CardRequiredError,
-    ExpiredCardError,
-    OwnershipError,
-    SubscriptionNotFoundError,
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    UnprocessableError,
 )
 from app.models.fincode_card import FincodeCard
 from app.models.fincode_customer import FincodeCustomer
@@ -33,7 +32,7 @@ from app.models.subscription import Subscription
 from app.models.subscription_result import SubscriptionResult
 from app.models.user import User
 from app.services.audit_logger import AuditLogger
-from app.services.customer_sync_service import CustomerSyncService
+from app.services.base_manager import BaseManager
 from app.services.fincode.client import FincodeClient
 from app.services.fincode.idempotency import new_nonce
 from app.services.fincode.plan_service import FincodePlanService, PlanData
@@ -59,13 +58,15 @@ FREE_PLAN: PlanData = {
 }
 
 
-class SubscriptionManager:
+class SubscriptionManager(BaseManager):
     def __init__(self, client: FincodeClient, audit: AuditLogger | None = None) -> None:
-        self._client = client
-        self._customers = CustomerSyncService(client)
+        super().__init__(client, audit)
         self._plans = FincodePlanService(client)
         self._subs = FincodeSubscriptionService(client)
-        self._audit = audit or AuditLogger()
+
+    @property
+    def auditable_type(self) -> str:
+        return "subscription"
 
     async def get_active(self, db: AsyncSession, user: User) -> Subscription | None:
         stmt = (
@@ -109,7 +110,7 @@ class SubscriptionManager:
 
         existing = await self.get_active(db, user)
         if existing is not None:
-            raise ActiveSubscriptionExistsError()
+            raise ConflictError(code="active_subscription_exists")
 
         is_free = plan_id == FREE_PLAN_ID
 
@@ -122,18 +123,18 @@ class SubscriptionManager:
         else:
             plan = await self._plans.fetch(plan_id)
             if card_id is None:
-                raise CardRequiredError()
+                raise UnprocessableError(code="card_required")
             # このユーザーのカードであり、削除・期限切れでないことを確認する。
             card = await db.get(FincodeCard, card_id)
             if card is None or card.deleted_at is not None:
-                raise SubscriptionNotFoundError("Card not found.")
+                raise NotFoundError("Card not found.", code="subscription_not_found")
             if card.user_id != user.id:
-                raise OwnershipError()
+                raise ForbiddenError()
 
             now = datetime.now(timezone.utc)
             # exp_year は 4 桁で保存される。exp の日付が現在より前なら期限切れ。
             if (card.exp_year, card.exp_month) < (now.year, now.month):
-                raise ExpiredCardError()
+                raise UnprocessableError(code="expired_card")
 
             customer = await self._customers.ensure(db, user)
 
@@ -160,7 +161,7 @@ class SubscriptionManager:
             await db.flush()
         except IntegrityError as e:
             await db.rollback()
-            raise ActiveSubscriptionExistsError() from e
+            raise ConflictError(code="active_subscription_exists") from e
 
         # フリープランは fincode 契約を作らない（fincode_subscription_id は None のまま）。
         if not is_free:
@@ -190,7 +191,7 @@ class SubscriptionManager:
             db,
             user_id=user.id,
             event="subscription.create",
-            auditable_type="subscription",
+            auditable_type=self.auditable_type,
             auditable_id=sub.id,
             after={
                 "fincode_subscription_id": sub.fincode_subscription_id,
@@ -203,7 +204,7 @@ class SubscriptionManager:
     async def cancel(self, db: AsyncSession, user: User) -> Subscription:
         sub = await self.get_active(db, user)
         if sub is None:
-            raise SubscriptionNotFoundError()
+            raise NotFoundError(code="subscription_not_found")
         if sub.fincode_subscription_id is None:
             # ローカルのみの行; ステータスを反転するだけ。
             sub.status = SubscriptionStatus.CANCELLED
@@ -220,7 +221,7 @@ class SubscriptionManager:
             db,
             user_id=user.id,
             event="subscription.cancel",
-            auditable_type="subscription",
+            auditable_type=self.auditable_type,
             auditable_id=sub.id,
             before={"status": SubscriptionStatus.ACTIVE},
             after={

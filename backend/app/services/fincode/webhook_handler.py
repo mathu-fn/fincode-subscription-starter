@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import PaymentStatus, SubscriptionStatus
-from app.core.exceptions import WebhookSignatureError
+from app.core.exceptions import UnauthenticatedError
 from app.core.logging import get_logger
 from app.models.subscription import Subscription
 from app.models.subscription_result import SubscriptionResult
@@ -56,14 +56,14 @@ class FincodeWebhookHandler:
 
     async def handle(self, *, payload: bytes, signature: str | None, db: AsyncSession) -> None:
         if not verify_signature(payload, signature, self._secret):
-            raise WebhookSignatureError()
+            raise UnauthenticatedError(code="invalid_webhook_signature")
 
         body = json.loads(payload.decode() or "{}")
         event_id = body.get("event_id") or body.get("id") or ""
         event_type = body.get("event") or body.get("type") or "unknown"
 
         if not event_id:
-            raise WebhookSignatureError("Missing event_id in webhook payload.")
+            raise UnauthenticatedError("Missing event_id in webhook payload.", code="invalid_webhook_signature")
 
         # webhook_events_seen への INSERT で重複排除する。UNIQUE 制約違反が発生した場合、
         # そのイベントは既に処理済みのため変更なしで 204 ACK を返す。
