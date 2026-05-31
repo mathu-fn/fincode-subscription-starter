@@ -1,16 +1,10 @@
 import { Link } from "react-router-dom";
 
+import { badgeClass, codeChip, primaryBtn, secondaryBtn, sectionTitle } from "../lib/styles";
+
 const GITHUB_URL = "https://github.com/ltac0203-pixel/fincode-subscription-starter";
 
-const badgeClass =
-  "inline-flex items-center gap-1.5 border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700";
-const primaryBtn =
-  "inline-flex min-h-11 items-center justify-center border border-sky-600 bg-sky-500 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2";
-const secondaryBtn =
-  "inline-flex min-h-11 items-center justify-center border border-sky-600 bg-white px-6 py-3 text-sm font-semibold text-sky-700 transition-colors hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2";
-const sectionTitle = "text-2xl font-bold text-sky-950 sm:text-3xl";
 const cardClass = "border border-sky-200 bg-white p-6 shadow-sm shadow-sky-100";
-const codeChip = "bg-sky-50 px-1.5 py-0.5 font-mono text-[0.85em] text-sky-800";
 
 const features: Array<{ title: string; description: string }> = [
   {
