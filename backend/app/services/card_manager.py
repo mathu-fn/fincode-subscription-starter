@@ -43,6 +43,10 @@ class CardManager(BaseManager):
         super().__init__(client, audit)
         self._card_service = FincodeCardService(client)
 
+    @property
+    def auditable_type(self) -> str:
+        return "fincode_card"
+
     async def list_cards(self, db: AsyncSession, user: User) -> list[FincodeCard]:
         stmt = (
             select(FincodeCard)
@@ -82,7 +86,7 @@ class CardManager(BaseManager):
             db,
             user_id=user.id,
             event="card.create",
-            auditable_type="fincode_card",
+            auditable_type=self.auditable_type,
             auditable_id=card.id,
             after={"brand": card.brand, "last4": card.last4},
         )
@@ -118,7 +122,7 @@ class CardManager(BaseManager):
             db,
             user_id=user.id,
             event="card.delete",
-            auditable_type="fincode_card",
+            auditable_type=self.auditable_type,
             auditable_id=card.id,
             before={"brand": card.brand, "last4": card.last4},
             after={"deleted_at": card.deleted_at.isoformat()},

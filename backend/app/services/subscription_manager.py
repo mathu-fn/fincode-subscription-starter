@@ -64,6 +64,10 @@ class SubscriptionManager(BaseManager):
         self._plans = FincodePlanService(client)
         self._subs = FincodeSubscriptionService(client)
 
+    @property
+    def auditable_type(self) -> str:
+        return "subscription"
+
     async def get_active(self, db: AsyncSession, user: User) -> Subscription | None:
         stmt = (
             select(Subscription)
@@ -187,7 +191,7 @@ class SubscriptionManager(BaseManager):
             db,
             user_id=user.id,
             event="subscription.create",
-            auditable_type="subscription",
+            auditable_type=self.auditable_type,
             auditable_id=sub.id,
             after={
                 "fincode_subscription_id": sub.fincode_subscription_id,
@@ -217,7 +221,7 @@ class SubscriptionManager(BaseManager):
             db,
             user_id=user.id,
             event="subscription.cancel",
-            auditable_type="subscription",
+            auditable_type=self.auditable_type,
             auditable_id=sub.id,
             before={"status": SubscriptionStatus.ACTIVE},
             after={
