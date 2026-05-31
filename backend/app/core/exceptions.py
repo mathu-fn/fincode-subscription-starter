@@ -85,6 +85,12 @@ class ExpiredCardError(AppError):
     default_message = "The card has expired."
 
 
+class CardRequiredError(AppError):
+    code = "card_required"
+    http_status = 422
+    default_message = "A card is required to subscribe to a paid plan."
+
+
 class PlanUnavailableError(AppError):
     code = "plan_unavailable"
     http_status = 422

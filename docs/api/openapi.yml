@@ -438,12 +438,17 @@ components:
           example: month
     CreateSubscriptionRequest:
       type: object
-      required: [fincode_plan_id, card_id]
+      required: [fincode_plan_id]
       properties:
         fincode_plan_id:
           type: string
+          description: |
+            契約するプランのID。`"free"` は 0 円フリープラン（アプリ側で合成、fincode 非依存）で、カード不要・ローカル完結で契約される。
         card_id:
           type: integer
+          nullable: true
+          description: |
+            支払いカードID。有料プランでは必須。フリープラン（`fincode_plan_id="free"`）では不要。
     Subscription:
       type: object
       required: [id, status, fincode_plan_id, plan_name, plan_amount, created_at]

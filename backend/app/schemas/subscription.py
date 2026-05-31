@@ -5,7 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class CreateSubscriptionRequest(BaseModel):
     fincode_plan_id: str = Field(min_length=1, max_length=128)
-    card_id: int
+    # フリープラン（fincode_plan_id="free"）はカード不要のため任意。
+    card_id: int | None = None
 
 
 class SubscriptionOut(BaseModel):

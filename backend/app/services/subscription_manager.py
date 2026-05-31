@@ -22,11 +22,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import SubscriptionStatus
 from app.core.exceptions import (
     ActiveSubscriptionExistsError,
+    CardRequiredError,
     ExpiredCardError,
     OwnershipError,
     SubscriptionNotFoundError,
 )
 from app.models.fincode_card import FincodeCard
+from app.models.fincode_customer import FincodeCustomer
 from app.models.subscription import Subscription
 from app.models.subscription_result import SubscriptionResult
 from app.models.user import User
@@ -36,6 +38,25 @@ from app.services.fincode.client import FincodeClient
 from app.services.fincode.idempotency import new_nonce
 from app.services.fincode.plan_service import FincodePlanService, PlanData
 from app.services.fincode.subscription_service import FincodeSubscriptionService
+
+# 0円フリープランはアプリ側で合成する番兵プラン。fincode には存在しない
+# （fincode は 0 円プランを作成できない）。fincode のプランIDは生成トークン
+# （``plan_test_*`` 等）なので ``"free"`` と衝突しない。契約・解約は fincode を
+# 介さず完全にローカルで完結する。
+FREE_PLAN_ID = "free"
+FREE_PLAN: PlanData = {
+    "fincode_plan_id": FREE_PLAN_ID,
+    "name": "フリープラン",
+    "amount": 0,
+    "currency": "JPY",
+    "interval": "month",
+    "raw": {
+        "id": FREE_PLAN_ID,
+        "plan_name": "フリープラン",
+        "amount": "0",
+        "synthetic": True,
+    },
+}
 
 
 class SubscriptionManager:
@@ -58,7 +79,8 @@ class SubscriptionManager:
         return (await db.execute(stmt)).scalar_one_or_none()
 
     async def list_plans(self) -> list[PlanData]:
-        return await self._plans.list_active()
+        # フリープランを先頭に注入してから fincode のプランを並べる。
+        return [FREE_PLAN, *await self._plans.list_active()]
 
     async def subscribe(
         self,
@@ -66,7 +88,7 @@ class SubscriptionManager:
         user: User,
         *,
         plan_id: str,
-        card_id: int,
+        card_id: int | None = None,
         idempotency_key: str | None = None,
     ) -> Subscription:
         # Idempotency-Key リプレイ: 同じクライアント提供キーによるリトライは、
@@ -89,21 +111,31 @@ class SubscriptionManager:
         if existing is not None:
             raise ActiveSubscriptionExistsError()
 
-        plan = await self._plans.fetch(plan_id)
+        is_free = plan_id == FREE_PLAN_ID
 
-        # このユーザーのカードであり、削除・期限切れでないことを確認する。
-        card = await db.get(FincodeCard, card_id)
-        if card is None or card.deleted_at is not None:
-            raise SubscriptionNotFoundError("Card not found.")
-        if card.user_id != user.id:
-            raise OwnershipError()
+        # プラン・カード・顧客を解決する。フリープランは fincode を介さずローカルで
+        # 完結するため、プラン情報は合成し、カード/顧客は持たない。
+        card: FincodeCard | None = None
+        customer: FincodeCustomer | None = None
+        if is_free:
+            plan = FREE_PLAN
+        else:
+            plan = await self._plans.fetch(plan_id)
+            if card_id is None:
+                raise CardRequiredError()
+            # このユーザーのカードであり、削除・期限切れでないことを確認する。
+            card = await db.get(FincodeCard, card_id)
+            if card is None or card.deleted_at is not None:
+                raise SubscriptionNotFoundError("Card not found.")
+            if card.user_id != user.id:
+                raise OwnershipError()
 
-        now = datetime.now(timezone.utc)
-        # exp_year は 4 桁で保存される。exp の日付が現在より前なら期限切れ。
-        if (card.exp_year, card.exp_month) < (now.year, now.month):
-            raise ExpiredCardError()
+            now = datetime.now(timezone.utc)
+            # exp_year は 4 桁で保存される。exp の日付が現在より前なら期限切れ。
+            if (card.exp_year, card.exp_month) < (now.year, now.month):
+                raise ExpiredCardError()
 
-        customer = await self._customers.ensure(db, user)
+            customer = await self._customers.ensure(db, user)
 
         # クライアントの Idempotency-Key をノンスとして再利用することで、
         # クライアントリトライ全体で決定論的な fincode Idempotency-Key が安定する
@@ -112,8 +144,8 @@ class SubscriptionManager:
         # ローカル行を先挿入してレース時に partial unique index が発火できるようにする。
         sub = Subscription(
             user_id=user.id,
-            fincode_customer_id=customer.id,
-            fincode_card_id=card.id,
+            fincode_customer_id=customer.id if customer is not None else None,
+            fincode_card_id=card.id if card is not None else None,
             fincode_subscription_id=None,
             nonce=nonce,
             fincode_plan_id=plan["fincode_plan_id"],
@@ -130,26 +162,29 @@ class SubscriptionManager:
             await db.rollback()
             raise ActiveSubscriptionExistsError() from e
 
-        try:
-            raw = await self._subs.create(
-                user_id=user.id,
-                customer_id=customer.fincode_customer_id,
-                card_id=card.fincode_card_id,
-                plan_id=plan["fincode_plan_id"],
-                nonce=nonce,
-            )
-        except Exception:
-            await db.delete(sub)
-            await db.flush()
-            raise
-
-        sub.fincode_subscription_id = raw.get("id")
-        if raw.get("current_period_end"):
+        # フリープランは fincode 契約を作らない（fincode_subscription_id は None のまま）。
+        if not is_free:
+            assert card is not None and customer is not None
             try:
-                sub.current_period_end = datetime.fromisoformat(raw["current_period_end"])
-            except (TypeError, ValueError):
-                pass
-        await db.flush()
+                raw = await self._subs.create(
+                    user_id=user.id,
+                    customer_id=customer.fincode_customer_id,
+                    card_id=card.fincode_card_id,
+                    plan_id=plan["fincode_plan_id"],
+                    nonce=nonce,
+                )
+            except Exception:
+                await db.delete(sub)
+                await db.flush()
+                raise
+
+            sub.fincode_subscription_id = raw.get("id")
+            if raw.get("current_period_end"):
+                try:
+                    sub.current_period_end = datetime.fromisoformat(raw["current_period_end"])
+                except (TypeError, ValueError):
+                    pass
+            await db.flush()
 
         await self._audit.record(
             db,
