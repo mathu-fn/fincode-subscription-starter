@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -103,5 +103,104 @@ describe("HomePage cards section", () => {
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
     expect(mocks.mountFincodeUi).toHaveBeenCalledWith({}, "fincode-ui-mount");
+  });
+
+  it("renders subscription and payment statuses as localized badges, with raw fallback for unknown values", async () => {
+    mocks.apiFetch.mockImplementation((path: string) => {
+      if (path === "/api/subscription") {
+        return Promise.resolve({
+          id: 1,
+          status: "active",
+          plan_name: "スタンダード",
+          plan_amount: 980,
+          plan_interval: "month",
+          cancelled_at: null,
+          current_period_end: null,
+          created_at: "2026-01-01T00:00:00Z"
+        });
+      }
+      if (path === "/api/subscription/plans") return Promise.resolve([]);
+      if (path === "/api/subscription/cards") return Promise.resolve([]);
+      if (path.startsWith("/api/subscription/history")) {
+        return Promise.resolve({
+          data: [
+            { id: 1, status: "succeeded", amount: 980, fincode_payment_id: "pay_1", charged_at: "2026-02-01T00:00:00Z" },
+            { id: 2, status: "failed", amount: 980, fincode_payment_id: "pay_2", charged_at: "2026-03-01T00:00:00Z" },
+            { id: 3, status: "authorized", amount: 980, fincode_payment_id: "pay_3", charged_at: "2026-04-01T00:00:00Z" }
+          ],
+          page: 1,
+          per_page: 10,
+          total: 3
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>
+    );
+
+    // 契約状態は日本語ラベルになる（生の "active" は表示されない）。
+    await waitFor(() => {
+      expect(screen.getAllByText("契約中").length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText("active")).not.toBeInTheDocument();
+
+    // 決済履歴の既知ステータスは日本語化される。
+    expect(screen.getByText("成功")).toBeInTheDocument();
+    expect(screen.getByText("失敗")).toBeInTheDocument();
+
+    // 未知のステータスは生の文字列のままフォールバック表示する（値を落とさない）。
+    expect(screen.getByText("authorized")).toBeInTheDocument();
+  });
+
+  it("confirms card deletion via the ConfirmDialog instead of window.confirm", async () => {
+    mocks.apiFetch.mockImplementation((path: string) => {
+      if (path === "/api/subscription") return Promise.resolve(null);
+      if (path === "/api/subscription/plans") return Promise.resolve([]);
+      if (path === "/api/subscription/cards") {
+        return Promise.resolve([
+          {
+            id: 77,
+            brand: "VISA",
+            last4: "4242",
+            exp_month: 12,
+            exp_year: 2030,
+            created_at: "2026-01-01T00:00:00Z"
+          }
+        ]);
+      }
+      if (path.startsWith("/api/subscription/history")) {
+        return Promise.resolve({ data: [], page: 1, per_page: 10, total: 0 });
+      }
+      return Promise.resolve(null);
+    });
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>
+    );
+
+    // カード一覧が読み込まれるまで待つ。この時点では削除ボタンは1つだけ。
+    const deleteButton = await screen.findByRole("button", { name: "削除" });
+    expect(mocks.apiFetch.mock.calls.some(([, opts]) => opts?.method === "DELETE")).toBe(false);
+
+    // 削除ボタン押下でブラウザの confirm ではなく ConfirmDialog が開く。
+    await userEvent.click(deleteButton);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("カードを削除しますか？")).toBeInTheDocument();
+
+    // インラインの削除ボタンと名前が衝突するため、確定ボタンはダイアログ内にスコープして押す。
+    await userEvent.click(within(dialog).getByRole("button", { name: "削除" }));
+
+    await waitFor(() => {
+      const deleteCall = mocks.apiFetch.mock.calls.find(
+        ([path, opts]) => path === "/api/subscription/cards/77" && opts?.method === "DELETE"
+      );
+      expect(deleteCall).toBeTruthy();
+    });
   });
 });

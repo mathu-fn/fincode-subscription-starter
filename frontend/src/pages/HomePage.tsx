@@ -2,8 +2,11 @@ import type { FormEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { LoadingButton } from "../components/LoadingButton";
+import { Skeleton } from "../components/Skeleton";
+import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch, ApiError } from "../lib/apiClient";
 import { FincodeUiBundle, initFincodeUi, mountFincodeUi, tokenizeViaUi, unmountFincodeUi } from "../lib/fincodeJs";
@@ -36,11 +39,14 @@ export function HomePage() {
   const [cardSubmitting, setCardSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cardPendingDelete, setCardPendingDelete] = useState<Card | null>(null);
   const [showCardForm, setShowCardForm] = useState<boolean>(false);
   const [cardFormLoading, setCardFormLoading] = useState(false);
   const [mockToken, setMockToken] = useState("tok_mock_visa");
   const [page, setPage] = useState(1);
   const [history, setHistory] = useState<PaginatedBillingHistory | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [latestHistory, setLatestHistory] = useState<HistoryItem | null>(null);
   const [error, setError] = useState<ApiError | Error | null>(null);
   const fincodeRef = useRef<FincodeUiBundle | null>(null);
@@ -86,6 +92,8 @@ export function HomePage() {
       }
     } catch (e) {
       setError(e as ApiError);
+    } finally {
+      setHistoryLoaded(true);
     }
   }, []);
 
@@ -169,9 +177,8 @@ export function HomePage() {
     }
   }
 
-  async function onCancel() {
+  async function confirmCancel() {
     if (!sub) return;
-    if (!confirm("本当に解約しますか？")) return;
     setCancelling(true);
     setError(null);
     try {
@@ -184,6 +191,7 @@ export function HomePage() {
       setError(e as ApiError);
     } finally {
       setCancelling(false);
+      setShowCancelConfirm(false);
     }
   }
 
@@ -217,9 +225,9 @@ export function HomePage() {
     }
   }
 
-  async function onDeleteCard(cardId: number) {
-    if (deletingCardId !== null) return;
-    if (!confirm("このカードを削除しますか？")) return;
+  async function confirmDeleteCard() {
+    if (!cardPendingDelete) return;
+    const cardId = cardPendingDelete.id;
     setError(null);
     setDeletingCardId(cardId);
     try {
@@ -229,6 +237,7 @@ export function HomePage() {
       setError(e as ApiError);
     } finally {
       setDeletingCardId(null);
+      setCardPendingDelete(null);
     }
   }
 
@@ -249,30 +258,64 @@ export function HomePage() {
       <div className="grid gap-3 md:grid-cols-3">
         <article className={summaryCardClass}>
           <span className="text-sm text-slate-500">現在の契約</span>
-          <strong className="text-2xl font-bold leading-tight text-sky-950">
-            {!subscriptionLoaded ? "読み込み中..." : sub ? sub.plan_name : "未登録"}
-          </strong>
-          <small className="text-sm text-slate-500">
-            {sub ? `${sub.status} / ${formatPlanPrice(sub.plan_amount, sub.plan_interval)}` : "プランを選択して契約できます"}
-          </small>
+          {!subscriptionLoaded ? (
+            <>
+              <Skeleton className="mt-1 h-7 w-3/4" />
+              <Skeleton className="mt-1 h-4 w-1/2" />
+            </>
+          ) : (
+            <>
+              <strong className="text-2xl font-bold leading-tight text-sky-950">
+                {sub ? sub.plan_name : "未登録"}
+              </strong>
+              <small className="flex items-center gap-2 text-sm text-slate-500">
+                {sub ? (
+                  <>
+                    <StatusBadge status={sub.status} />
+                    <span>{formatPlanPrice(sub.plan_amount, sub.plan_interval)}</span>
+                  </>
+                ) : (
+                  "プランを選択して契約できます"
+                )}
+              </small>
+            </>
+          )}
         </article>
         <article className={summaryCardClass}>
           <span className="text-sm text-slate-500">登録カード</span>
-          <strong className="text-2xl font-bold leading-tight text-sky-950">
-            {plansLoaded ? `${cards.length} 枚` : "読み込み中..."}
-          </strong>
-          <small className="text-sm text-slate-500">
-            {selectedCard ? `${selectedCard.brand} **** ${selectedCard.last4}` : "支払いカードを追加できます"}
-          </small>
+          {!plansLoaded ? (
+            <>
+              <Skeleton className="mt-1 h-7 w-1/2" />
+              <Skeleton className="mt-1 h-4 w-3/4" />
+            </>
+          ) : (
+            <>
+              <strong className="text-2xl font-bold leading-tight text-sky-950">
+                {cards.length} 枚
+              </strong>
+              <small className="text-sm text-slate-500">
+                {selectedCard ? `${selectedCard.brand} **** ${selectedCard.last4}` : "支払いカードを追加できます"}
+              </small>
+            </>
+          )}
         </article>
         <article className={summaryCardClass}>
           <span className="text-sm text-slate-500">直近決済</span>
-          <strong className="text-2xl font-bold leading-tight text-sky-950">
-            {latestHistory ? `¥${latestHistory.amount.toLocaleString()}` : "履歴なし"}
-          </strong>
-          <small className="text-sm text-slate-500">
-            {latestHistory ? new Date(latestHistory.charged_at).toLocaleString("ja-JP") : "決済後に表示されます"}
-          </small>
+          {!historyLoaded ? (
+            <>
+              <Skeleton className="mt-1 h-7 w-1/2" />
+              <Skeleton className="mt-1 h-4 w-3/4" />
+            </>
+          ) : (
+            <>
+              <strong className="text-2xl font-bold leading-tight text-sky-950">
+                {latestHistory ? `¥${latestHistory.amount.toLocaleString()}` : "履歴なし"}
+              </strong>
+              <small className="text-sm text-slate-500">
+                {latestHistory ? new Date(latestHistory.charged_at).toLocaleString("ja-JP") : "決済後に表示されます"}
+              </small>
+            </>
+          )}
         </article>
       </div>
 
@@ -304,7 +347,9 @@ export function HomePage() {
               </div>
               <div className="bg-sky-50 p-4">
                 <dt className="text-sm text-slate-500">状態</dt>
-                <dd className="mt-1 font-semibold text-slate-900">{sub.status}</dd>
+                <dd className="mt-1">
+                  <StatusBadge status={sub.status} />
+                </dd>
               </div>
               <div className="bg-sky-50 p-4">
                 <dt className="text-sm text-slate-500">契約日</dt>
@@ -319,7 +364,7 @@ export function HomePage() {
             </dl>
             {sub.status === "active" && (
               <p className="mt-6">
-                <LoadingButton type="button" variant="danger" isLoading={cancelling} loadingLabel="解約中..." onClick={onCancel}>
+                <LoadingButton type="button" variant="danger" isLoading={cancelling} loadingLabel="解約中..." onClick={() => setShowCancelConfirm(true)}>
                   解約する
                 </LoadingButton>
               </p>
@@ -429,7 +474,7 @@ export function HomePage() {
                     disabled={deletingCardId !== null}
                     isLoading={deletingCardId === card.id}
                     loadingLabel="削除中..."
-                    onClick={() => onDeleteCard(card.id)}
+                    onClick={() => setCardPendingDelete(card)}
                   >
                     削除
                   </LoadingButton>
@@ -499,7 +544,36 @@ export function HomePage() {
           <h2 className="text-xl font-bold text-sky-950">履歴</h2>
         </div>
         {!history ? (
-          <p className="text-slate-600">読み込み中...</p>
+          <div className="overflow-x-auto border border-sky-200 bg-white shadow-sm shadow-sky-100">
+            <table className="w-full min-w-[680px] border-collapse text-left">
+              <thead>
+                <tr>
+                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">日時</th>
+                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">状態</th>
+                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">金額</th>
+                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">fincode 支払 ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="border-b border-sky-100 px-4 py-3">
+                      <Skeleton className="h-4 w-32" />
+                    </td>
+                    <td className="border-b border-sky-100 px-4 py-3">
+                      <Skeleton className="h-4 w-16" />
+                    </td>
+                    <td className="border-b border-sky-100 px-4 py-3">
+                      <Skeleton className="h-4 w-20" />
+                    </td>
+                    <td className="border-b border-sky-100 px-4 py-3">
+                      <Skeleton className="h-4 w-40" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : history.data.length === 0 ? (
           <p className="text-slate-700">履歴はまだありません。</p>
         ) : (
@@ -520,7 +594,9 @@ export function HomePage() {
                     <td className="border-b border-sky-100 px-4 py-3 text-sm text-slate-800">
                       {new Date(record.charged_at).toLocaleString("ja-JP")}
                     </td>
-                    <td className="border-b border-sky-100 px-4 py-3 text-sm text-slate-800">{record.status}</td>
+                    <td className="border-b border-sky-100 px-4 py-3 text-sm text-slate-800">
+                      <StatusBadge status={record.status} />
+                    </td>
                     <td className="border-b border-sky-100 px-4 py-3 text-sm font-semibold text-slate-900">¥{record.amount.toLocaleString()}</td>
                     <td className="border-b border-sky-100 px-4 py-3 text-sm text-slate-500">{record.fincode_payment_id ?? "-"}</td>
                   </tr>
@@ -552,6 +628,33 @@ export function HomePage() {
           </>
         )}
       </section>
+
+      <ConfirmDialog
+        open={showCancelConfirm}
+        title="本当に解約しますか？"
+        description="現在の契約を解約します。次回以降の請求は発生しません。"
+        confirmLabel="解約する"
+        loadingLabel="解約中..."
+        variant="danger"
+        isConfirming={cancelling}
+        onConfirm={confirmCancel}
+        onCancel={() => setShowCancelConfirm(false)}
+      />
+      <ConfirmDialog
+        open={cardPendingDelete !== null}
+        title="カードを削除しますか？"
+        description={
+          cardPendingDelete
+            ? `${cardPendingDelete.brand} **** ${cardPendingDelete.last4} を削除します。`
+            : undefined
+        }
+        confirmLabel="削除"
+        loadingLabel="削除中..."
+        variant="danger"
+        isConfirming={deletingCardId !== null}
+        onConfirm={confirmDeleteCard}
+        onCancel={() => setCardPendingDelete(null)}
+      />
     </section>
   );
 }
