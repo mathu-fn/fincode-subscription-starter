@@ -76,4 +76,32 @@ describe("HomePage cards section", () => {
     expect(document.getElementById("fincode-ui-mount")).not.toBeInTheDocument();
     expect(mocks.unmountFincodeUi).toHaveBeenCalled();
   });
+
+  it("shows a loading overlay while the fincode UI initializes and hides it once mounted", async () => {
+    let resolveInit: (bundle: { fincode: object; ui: object }) => void = () => {};
+    mocks.initFincodeUi.mockReturnValue(
+      new Promise((resolve) => {
+        resolveInit = resolve;
+      })
+    );
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "カードを追加" }));
+
+    // 初期化が resolve するまではオーバーレイが表示される
+    expect(screen.getByRole("status")).toBeInTheDocument();
+
+    resolveInit({ fincode: {}, ui: {} });
+
+    // mount 完了でオーバーレイが消える
+    await waitFor(() => {
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+    expect(mocks.mountFincodeUi).toHaveBeenCalledWith({}, "fincode-ui-mount");
+  });
 });

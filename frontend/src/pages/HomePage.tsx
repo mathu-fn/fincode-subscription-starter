@@ -77,6 +77,7 @@ export function HomePage() {
   const [cancelling, setCancelling] = useState(false);
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null);
   const [showCardForm, setShowCardForm] = useState<boolean>(false);
+  const [cardFormLoading, setCardFormLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [history, setHistory] = useState<PaginatedBillingHistory | null>(null);
   const [latestHistory, setLatestHistory] = useState<HistoryItem | null>(null);
@@ -161,12 +162,17 @@ export function HomePage() {
         fincodeRef.current = bundle;
         mountedBundle = bundle;
         mountFincodeUi(bundle.ui, FINCODE_MOUNT_ID);
+        setCardFormLoading(false);
       } catch (e) {
-        if (!cancelled) setError(e as Error);
+        if (!cancelled) {
+          setError(e as Error);
+          setCardFormLoading(false);
+        }
       }
     })();
     return () => {
       cancelled = true;
+      setCardFormLoading(false);
       unmountFincodeUi(mountedBundle?.ui);
       fincodeRef.current = null;
     };
@@ -417,6 +423,7 @@ export function HomePage() {
               onClick={() => {
                 setError(null);
                 setShowCardForm(true);
+                setCardFormLoading(true);
               }}
             >
               カードを追加
@@ -468,7 +475,20 @@ export function HomePage() {
             <p className="mt-2 text-sm text-slate-600">
               カード番号と CVC はサーバーへ送信されません。fincode の UI コンポーネントでトークン化されたトークンのみがバックエンドへ送信されます。
             </p>
-            <form onSubmit={onSubmitCard} className="mt-3 grid gap-3">
+            <form onSubmit={onSubmitCard} className="relative mt-3 grid gap-3">
+              {cardFormLoading && (
+                <div
+                  className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/50"
+                  role="status"
+                  aria-live="polite"
+                  aria-label="カード入力フォームを読み込み中"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="h-8 w-8 animate-spin border-2 border-white border-t-transparent"
+                  />
+                </div>
+              )}
               <div id={`${FINCODE_MOUNT_ID}-form`} className="max-w-full">
                 <div id={FINCODE_MOUNT_ID} className="min-h-96 border border-sky-200 bg-white p-3" />
               </div>
