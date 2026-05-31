@@ -63,6 +63,11 @@ async def get_current_user(
 
 
 def get_fincode_client(settings: Settings = Depends(get_settings)) -> "FincodeClient":
+    if settings.fincode_mock_enabled:
+        from app.services.fincode.mock_client import FincodeMockClient
+
+        return FincodeMockClient()
+
     from app.services.fincode.client import FincodeHttpClient
 
     return FincodeHttpClient(

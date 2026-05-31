@@ -7,7 +7,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import get_settings
 from app.core.exception_handlers import register_exception_handlers
-from app.core.logging import configure_logging
+from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLogMiddleware
 from app.core.rate_limit import limiter
 
@@ -16,6 +16,14 @@ def create_app() -> FastAPI:
     configure_logging()
 
     settings = get_settings()
+
+    if settings.fincode_mock_enabled:
+        # mock モードは fincode を一切叩かず固定のダミーデータを返す。
+        # 本番で誤ってこのモードのまま起動していないか気付けるよう、必ず警告を残す。
+        get_logger("app.startup").warning(
+            "fincode_mock_mode_enabled",
+            detail="FINCODE_MODE=mock: 実際の fincode API は呼び出されません（開発用）。",
+        )
 
     app = FastAPI(
         title="fincode Subscription OSS API",
