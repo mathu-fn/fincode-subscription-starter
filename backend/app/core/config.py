@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     fincode_base_url: str = "https://api.test.fincode.jp"
     fincode_tenant_shop_id: str = ""
     fincode_webhook_secret: str = "change-me"
+    # "mock" にすると fincode API を一切叩かず固定のダミーデータを返す。
+    # fincode アカウント無しで UI / API を試すための開発専用モード。
+    # 本番では既定の "live" のままにする（誤って mock で起動しないよう既定は安全側）。
+    fincode_mode: str = "live"
 
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
@@ -49,6 +53,11 @@ class Settings(BaseSettings):
     def sync_database_url(self) -> str:
         """Alembic は同期ドライバーを使用する。+asyncpg を +psycopg に変換。"""
         return self.database_url.replace("+asyncpg", "+psycopg")
+
+    @property
+    def fincode_mock_enabled(self) -> bool:
+        """fincode モッククライアントを使うべきか（``FINCODE_MODE=mock``）。"""
+        return self.fincode_mode.strip().lower() == "mock"
 
 
 @lru_cache

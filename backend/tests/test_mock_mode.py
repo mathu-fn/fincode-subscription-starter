@@ -1,0 +1,102 @@
+"""``FINCODE_MODE=mock`` のモッククライアントと依存配線のテスト。
+
+fincode アカウント無しでカード登録〜契約まで通ることを、実 HTTP を一切使わずに検証する。
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest_asyncio
+from httpx import AsyncClient
+
+from app.api.deps import get_fincode_client
+from app.core.config import Settings
+from app.services.fincode.client import FincodeHttpClient
+from app.services.fincode.mock_client import FincodeMockClient
+
+
+def test_get_fincode_client_returns_mock_when_mode_mock() -> None:
+    client = get_fincode_client(Settings(fincode_mode="mock"))
+    assert isinstance(client, FincodeMockClient)
+
+
+def test_get_fincode_client_returns_http_client_by_default() -> None:
+    client = get_fincode_client(Settings(fincode_mode="live"))
+    assert isinstance(client, FincodeHttpClient)
+
+
+def test_fincode_mock_enabled_is_case_insensitive() -> None:
+    assert Settings(fincode_mode="MOCK").fincode_mock_enabled is True
+    assert Settings(fincode_mode=" mock ").fincode_mock_enabled is True
+    assert Settings(fincode_mode="live").fincode_mock_enabled is False
+
+
+async def test_mock_client_lists_and_fetches_plans() -> None:
+    client = FincodeMockClient()
+    listed = await client.request("GET", "/v1/plans")
+    ids = {p["id"] for p in listed["list"]}
+    assert {"plan_mock_basic", "plan_mock_pro"} <= ids
+
+    one = await client.request("GET", "/v1/plans/plan_mock_basic")
+    assert one["id"] == "plan_mock_basic"
+    assert one["delete_flag"] == "0"
+
+
+async def test_mock_client_card_is_deterministic_per_token() -> None:
+    client = FincodeMockClient()
+    a = await client.request("POST", "/v1/customers/customer_mock/cards", json={"token": "tok_a"})
+    again = await client.request(
+        "POST", "/v1/customers/customer_mock/cards", json={"token": "tok_a"}
+    )
+    b = await client.request("POST", "/v1/customers/customer_mock/cards", json={"token": "tok_b"})
+
+    assert a["id"].startswith("card_mock_")
+    assert a["brand"] in {"VISA", "Mastercard", "JCB", "AMEX"}
+    assert len(a["card_no"][-4:]) == 4
+    # 同じトークンは同じカード、別トークンは（基本的に）別カードになる。
+    assert a == again
+    assert a["id"] != b["id"]
+
+
+async def test_mock_client_creates_subscription_with_mock_id() -> None:
+    client = FincodeMockClient()
+    raw = await client.request(
+        "POST", "/v1/subscriptions", json={"plan_id": "plan_mock_basic"}, idempotency_key="n1"
+    )
+    assert raw["id"].startswith("sub_mock_")
+    assert raw["status"] == "active"
+    assert raw["current_period_end"]
+
+
+@pytest_asyncio.fixture()
+async def mock_fincode(app_instance) -> FincodeMockClient:
+    mock = FincodeMockClient()
+    app_instance.dependency_overrides[get_fincode_client] = lambda: mock
+    return mock
+
+
+async def test_full_card_then_paid_subscription_flow_in_mock_mode(
+    auth_client: AsyncClient, mock_fincode: FincodeMockClient
+) -> None:
+    # プラン一覧にモックプランが出る。
+    plans = (await auth_client.get("/api/subscription/plans")).json()
+    plan_ids = {p["fincode_plan_id"] for p in plans}
+    assert "plan_mock_basic" in plan_ids
+
+    # カード登録（fincode UI を介さず、ダミートークンを直接 POST）。
+    card_resp = await auth_client.post("/api/subscription/cards", json={"token": "tok_mock_visa"})
+    assert card_resp.status_code == 201, card_resp.text
+    card: dict[str, Any] = card_resp.json()
+    assert card["last4"] and card["brand"]
+
+    # 有料プランの契約が成功し、fincode 契約 ID にモック ID が入る。
+    sub_resp = await auth_client.post(
+        "/api/subscription",
+        json={"fincode_plan_id": "plan_mock_basic", "card_id": card["id"]},
+    )
+    assert sub_resp.status_code == 201, sub_resp.text
+    sub = sub_resp.json()
+    assert sub["status"] == "active"
+    assert sub["plan_amount"] == 500
+    assert sub["fincode_subscription_id"].startswith("sub_mock_")

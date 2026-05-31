@@ -38,7 +38,8 @@ cp .env.example .env
 
 | キー | 既定値 | 用途 |
 | --- | --- | --- |
-| `FINCODE_API_KEY` | （空） | fincode シークレットキー（`m_test_*` / `m_prod_*`）。バックエンドから fincode API を呼び出すのに使う |
+| `FINCODE_MODE` | `live` | `mock` にすると fincode API を一切叩かず固定のダミーデータを返す（fincode アカウント不要の開発用）。本番では `live` のままにする。`.env.example` は手早く試せるよう `mock` 入りで配布している |
+| `FINCODE_API_KEY` | （空） | fincode シークレットキー（`m_test_*` / `m_prod_*`）。バックエンドから fincode API を呼び出すのに使う。`FINCODE_MODE=mock` のときは未設定でよい |
 | `FINCODE_PUBLIC_KEY` | （空） | fincode 公開鍵（`p_test_*` / `p_prod_*`）。サーバ側参照用 |
 | `FINCODE_BASE_URL` | `https://api.test.fincode.jp` | fincode API のエンドポイント。本番は `https://api.fincode.jp` |
 | `FINCODE_TENANT_SHOP_ID` | （空） | プラットフォーム / マルチテナント構成のみ必要。設定すると `Tenant-Shop-Id` ヘッダーが送信される |
@@ -65,7 +66,8 @@ cp .env.example .env
 | キー | 既定値 | 用途 |
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | `http://localhost:8000` | フロントエンドが呼び出すバックエンドのベース URL |
-| `VITE_FINCODE_PUBLIC_KEY` | （空） | ブラウザ上の fincode.js で使う公開鍵。`FINCODE_PUBLIC_KEY` と同じ値 |
+| `VITE_FINCODE_MODE` | （空 = ライブ） | `mock` にするとフロントは fincode.js を読み込まず、カード登録フォームがテストトークン直接入力に切り替わる。バックエンドの `FINCODE_MODE` と揃える |
+| `VITE_FINCODE_PUBLIC_KEY` | （空） | ブラウザ上の fincode.js で使う公開鍵。`FINCODE_PUBLIC_KEY` と同じ値。`VITE_FINCODE_MODE=mock` のときは不要 |
 | `VITE_FINCODE_SDK_URL` | `https://js.test.fincode.jp/v1/fincode.js` | 読み込む fincode.js SDK の URL。本番は `https://js.fincode.jp/v1/fincode.js` |
 
 ## 環境ごとの典型値
@@ -95,6 +97,7 @@ API_URL=https://api.example.com
 DATABASE_URL=postgresql+asyncpg://app:<strong-password>@db.internal:5432/subscription_app
 JWT_SECRET_KEY=<32+ bytes of randomness from secret store>
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+FINCODE_MODE=live
 FINCODE_API_KEY=m_prod_xxxxxxxxxxxxxxxxxxxxxxx
 FINCODE_PUBLIC_KEY=p_prod_xxxxxxxxxxxxxxxxxxxxxxx
 FINCODE_BASE_URL=https://api.fincode.jp

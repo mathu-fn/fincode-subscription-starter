@@ -2,6 +2,8 @@
 
 このアプリケーションを動作させるには、[Fincode](https://www.fincode.jp/) のアカウントとAPIキーが必要です。テストモードであれば無料で利用できます。
 
+> まずアカウント無しで UI と API を触りたい場合は、`.env` の `FINCODE_MODE=mock` / `VITE_FINCODE_MODE=mock`（`.env.example` の既定）で起動できます。fincode を実際に呼ばずダミーデータで動くモードです。本物の fincode につなぐときに以下を設定してください。
+
 ## 1. Fincodeアカウントの取得
 
 1. [Fincode](https://www.fincode.jp/) のサイトから新規登録（テナント作成）

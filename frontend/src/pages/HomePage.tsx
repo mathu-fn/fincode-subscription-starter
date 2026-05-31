@@ -7,6 +7,7 @@ import { LoadingButton } from "../components/LoadingButton";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch, ApiError } from "../lib/apiClient";
 import { FincodeUiBundle, initFincodeUi, mountFincodeUi, tokenizeViaUi, unmountFincodeUi } from "../lib/fincodeJs";
+import { isFincodeMockMode } from "../lib/fincodeMode";
 import { inputClass, labelClass, pageClass, primaryLinkClass, sectionClass, summaryCardClass } from "../lib/styles";
 import type { Subscription, Plan, Card, HistoryItem, PaginatedBillingHistory } from "../types/api";
 
@@ -22,6 +23,7 @@ function formatPlanPrice(amount: number, interval: string): string {
 const cardClass = "border border-sky-200 bg-white p-4 shadow-sm shadow-sky-100";
 
 export function HomePage() {
+  const mockMode = isFincodeMockMode();
   const { user } = useAuth();
   const location = useLocation();
   const [sub, setSub] = useState<Subscription>(null);
@@ -36,6 +38,7 @@ export function HomePage() {
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null);
   const [showCardForm, setShowCardForm] = useState<boolean>(false);
   const [cardFormLoading, setCardFormLoading] = useState(false);
+  const [mockToken, setMockToken] = useState("tok_mock_visa");
   const [page, setPage] = useState(1);
   const [history, setHistory] = useState<PaginatedBillingHistory | null>(null);
   const [latestHistory, setLatestHistory] = useState<HistoryItem | null>(null);
@@ -110,7 +113,8 @@ export function HomePage() {
   }, [page, refreshHistory]);
 
   useEffect(() => {
-    if (!showCardForm) return;
+    // モックモードでは fincode.js を読み込まず、テストトークンを直接入力する。
+    if (!showCardForm || mockMode) return;
     let cancelled = false;
     let mountedBundle: FincodeUiBundle | null = null;
     (async () => {
@@ -134,7 +138,7 @@ export function HomePage() {
       unmountFincodeUi(mountedBundle?.ui);
       fincodeRef.current = null;
     };
-  }, [showCardForm]);
+  }, [showCardForm, mockMode]);
 
   async function subscribe(planId: string) {
     const isFree = planId === FREE_PLAN_ID;
@@ -188,11 +192,17 @@ export function HomePage() {
     setError(null);
     setCardSubmitting(true);
     try {
-      const bundle = fincodeRef.current;
-      if (!bundle) throw new Error("fincode UI コンポーネントが初期化されていません。");
-      const token = await tokenizeViaUi(bundle.fincode, bundle.ui);
-      if (!token) {
-        throw new Error("カードトークンの取得に失敗しました。");
+      let token: string;
+      if (mockMode) {
+        token = mockToken.trim();
+        if (!token) throw new Error("テストトークンを入力してください。");
+      } else {
+        const bundle = fincodeRef.current;
+        if (!bundle) throw new Error("fincode UI コンポーネントが初期化されていません。");
+        token = await tokenizeViaUi(bundle.fincode, bundle.ui);
+        if (!token) {
+          throw new Error("カードトークンの取得に失敗しました。");
+        }
       }
       await apiFetch("/api/subscription/cards", {
         method: "POST",
@@ -391,7 +401,8 @@ export function HomePage() {
               onClick={() => {
                 setError(null);
                 setShowCardForm(true);
-                setCardFormLoading(true);
+                // モックモードは fincode.js を初期化しないのでローディング表示も不要。
+                setCardFormLoading(!mockMode);
               }}
             >
               カードを追加
@@ -441,7 +452,9 @@ export function HomePage() {
               </button>
             </div>
             <p className="mt-2 text-sm text-slate-600">
-              カード番号と CVC はサーバーへ送信されません。fincode の UI コンポーネントでトークン化されたトークンのみがバックエンドへ送信されます。
+              {mockMode
+                ? "モックモードです。fincode は呼び出されません。任意のテストトークンを直接入力すると、ダミーのカードが登録されます。"
+                : "カード番号と CVC はサーバーへ送信されません。fincode の UI コンポーネントでトークン化されたトークンのみがバックエンドへ送信されます。"}
             </p>
             <form onSubmit={onSubmitCard} className="relative mt-3 grid gap-3">
               {cardFormLoading && (
@@ -457,9 +470,22 @@ export function HomePage() {
                   />
                 </div>
               )}
-              <div id={`${FINCODE_MOUNT_ID}-form`} className="max-w-full">
-                <div id={FINCODE_MOUNT_ID} className="min-h-96 border border-sky-200 bg-white p-3" />
-              </div>
+              {mockMode ? (
+                <label className={labelClass}>
+                  <span>テストトークンを直接入力</span>
+                  <input
+                    className={inputClass}
+                    value={mockToken}
+                    onChange={(e) => setMockToken(e.target.value)}
+                    placeholder="tok_mock_visa"
+                    autoComplete="off"
+                  />
+                </label>
+              ) : (
+                <div id={`${FINCODE_MOUNT_ID}-form`} className="max-w-full">
+                  <div id={FINCODE_MOUNT_ID} className="min-h-96 border border-sky-200 bg-white p-3" />
+                </div>
+              )}
               <LoadingButton type="submit" isLoading={cardSubmitting} loadingLabel="登録中...">
                 カードを追加
               </LoadingButton>
