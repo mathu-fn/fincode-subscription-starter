@@ -377,7 +377,7 @@ export function HomePage() {
           <>
             {cards.length === 0 ? (
               <article className={cardClass}>
-                <p className="text-slate-700">契約にはカードが必要です。</p>
+                <p className="text-slate-700">有料プランの契約にはカードが必要です。フリープランはカード無しで契約できます。</p>
                 <p className="mt-4">
                   <a href="#cards" className={primaryLinkClass}>
                     カードを登録する
