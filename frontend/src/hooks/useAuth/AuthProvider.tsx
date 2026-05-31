@@ -1,26 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import { apiFetch } from "../lib/apiClient";
-import { clearToken, getToken, getUser, setToken, setUser, type User } from "../lib/auth";
-
-type AuthResponse = {
-  access_token: string;
-  token_type: string;
-  expires_at: string;
-  user: User;
-};
-
-type AuthContextValue = {
-  user: User | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<User>;
-  register: (name: string, email: string, password: string) => Promise<User>;
-  logout: () => Promise<void>;
-  refresh: () => Promise<void>;
-};
-
-const AuthContext = createContext<AuthContextValue | null>(null);
+import { apiFetch } from "../../lib/apiClient";
+import { clearToken, getToken, getUser, setToken, setUser, type User } from "../../lib/auth";
+import { AuthContext } from "./AuthContext";
+import type { AuthContextValue, AuthResponse } from "./types";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<User | null>(() => getUser());
@@ -99,12 +83,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({ user, loading, login, register, logout, refresh }), [user, loading, login, register, logout, refresh]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used inside AuthProvider.");
-  }
-  return ctx;
 }
