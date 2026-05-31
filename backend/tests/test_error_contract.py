@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.exceptions import (
+    AppError,
     ConflictError,
     ForbiddenError,
     NotFoundError,
@@ -103,7 +104,7 @@ from app.core.exceptions import (
     ],
 )
 def test_business_error_contract(
-    exc: Exception,
+    exc: AppError,
     expected_code: str,
     expected_status: int,
     expected_message: str,
