@@ -41,6 +41,13 @@ services:
     container_name: fincode_subscription_frontend
     working_dir: /app
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    # Vite に渡す VITE_* だけを .env から明示的に渡す（バックエンドのシークレットは渡さない）。
+    # 既定の .env は VITE_FINCODE_MODE=mock なので、そのまま up するとモックモードで起動する。
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+      VITE_FINCODE_MODE: ${VITE_FINCODE_MODE:-}
+      VITE_FINCODE_PUBLIC_KEY: ${VITE_FINCODE_PUBLIC_KEY:-}
+      VITE_FINCODE_SDK_URL: ${VITE_FINCODE_SDK_URL:-https://js.test.fincode.jp/v1/fincode.js}
     volumes:
       - ./frontend:/app
     ports:
