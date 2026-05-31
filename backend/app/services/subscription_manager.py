@@ -32,7 +32,7 @@ from app.models.subscription import Subscription
 from app.models.subscription_result import SubscriptionResult
 from app.models.user import User
 from app.services.audit_logger import AuditLogger
-from app.services.customer_sync_service import CustomerSyncService
+from app.services.base_manager import BaseManager
 from app.services.fincode.client import FincodeClient
 from app.services.fincode.idempotency import new_nonce
 from app.services.fincode.plan_service import FincodePlanService, PlanData
@@ -58,13 +58,11 @@ FREE_PLAN: PlanData = {
 }
 
 
-class SubscriptionManager:
+class SubscriptionManager(BaseManager):
     def __init__(self, client: FincodeClient, audit: AuditLogger | None = None) -> None:
-        self._client = client
-        self._customers = CustomerSyncService(client)
+        super().__init__(client, audit)
         self._plans = FincodePlanService(client)
         self._subs = FincodeSubscriptionService(client)
-        self._audit = audit or AuditLogger()
 
     async def get_active(self, db: AsyncSession, user: User) -> Subscription | None:
         stmt = (

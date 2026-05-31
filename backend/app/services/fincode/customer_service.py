@@ -6,14 +6,11 @@
 
 from __future__ import annotations
 
-from app.services.fincode.client import FincodeClient
+from app.services.fincode.base import BaseFincodeService
 from app.services.fincode.idempotency import idem_key
 
 
-class FincodeCustomerService:
-    def __init__(self, client: FincodeClient) -> None:
-        self._client = client
-
+class FincodeCustomerService(BaseFincodeService):
     async def create(self, *, user_id: int, email: str, name: str) -> dict:
         body = {"id": f"local_user_{user_id}", "email": email, "name": name}
         return await self._client.request(

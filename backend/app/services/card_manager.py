@@ -20,7 +20,7 @@ from app.models.fincode_customer import FincodeCustomer
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.audit_logger import AuditLogger
-from app.services.customer_sync_service import CustomerSyncService
+from app.services.base_manager import BaseManager
 from app.services.fincode.card_service import FincodeCardService
 from app.services.fincode.client import FincodeClient
 
@@ -38,12 +38,10 @@ def _parse_expire(expire: str | None) -> tuple[int, int]:
         return 1, 1970
 
 
-class CardManager:
+class CardManager(BaseManager):
     def __init__(self, client: FincodeClient, audit: AuditLogger | None = None) -> None:
-        self._client = client
+        super().__init__(client, audit)
         self._card_service = FincodeCardService(client)
-        self._customers = CustomerSyncService(client)
-        self._audit = audit or AuditLogger()
 
     async def list_cards(self, db: AsyncSession, user: User) -> list[FincodeCard]:
         stmt = (

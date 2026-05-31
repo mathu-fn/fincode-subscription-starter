@@ -10,6 +10,7 @@ import time
 from typing import Any, TypedDict
 
 from app.core.exceptions import UnprocessableError
+from app.services.fincode.base import BaseFincodeService
 from app.services.fincode.client import FincodeClient
 
 
@@ -29,11 +30,11 @@ class PlanData(TypedDict):
     raw: dict[str, Any]
 
 
-class FincodePlanService:
+class FincodePlanService(BaseFincodeService):
     _cache_ttl = 60.0
 
     def __init__(self, client: FincodeClient) -> None:
-        self._client = client
+        super().__init__(client)
         self._list_cache: tuple[float, list[PlanData]] | None = None
         self._plan_cache: dict[str, tuple[float, PlanData]] = {}
 

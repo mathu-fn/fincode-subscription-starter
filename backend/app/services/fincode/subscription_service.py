@@ -2,14 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.services.fincode.client import FincodeClient
+from app.services.fincode.base import BaseFincodeService
 from app.services.fincode.idempotency import idem_key
 
 
-class FincodeSubscriptionService:
-    def __init__(self, client: FincodeClient) -> None:
-        self._client = client
-
+class FincodeSubscriptionService(BaseFincodeService):
     async def create(
         self,
         *,
