@@ -1,17 +1,17 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-type LoadingButtonVariant = "primary" | "danger" | "ghost";
+import type { ButtonVariant } from "../types/ui";
 
 type LoadingButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   isLoading?: boolean;
   loadingLabel?: ReactNode;
-  variant?: LoadingButtonVariant;
+  variant?: ButtonVariant;
 };
 
 const baseClass =
   "inline-flex min-h-11 items-center justify-center gap-2 border px-5 py-2.5 text-sm font-semibold transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
 
-const variantClasses: Record<LoadingButtonVariant, string> = {
+const variantClasses: Record<ButtonVariant, string> = {
   primary:
     "border-sky-600 bg-sky-500 text-white hover:bg-sky-600 focus:ring-sky-500 focus:ring-offset-white",
   danger:

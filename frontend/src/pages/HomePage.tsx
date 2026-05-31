@@ -7,49 +7,7 @@ import { LoadingButton } from "../components/LoadingButton";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch, ApiError } from "../lib/apiClient";
 import { FincodeUiBundle, initFincodeUi, mountFincodeUi, tokenizeViaUi, unmountFincodeUi } from "../lib/fincodeJs";
-
-type Subscription = {
-  id: number;
-  status: string;
-  plan_name: string;
-  plan_amount: number;
-  plan_interval: string;
-  cancelled_at: string | null;
-  current_period_end: string | null;
-  created_at: string;
-} | null;
-
-type Plan = {
-  fincode_plan_id: string;
-  name: string;
-  amount: number;
-  currency: string;
-  interval: string;
-};
-
-type Card = {
-  id: number;
-  brand: string;
-  last4: string;
-  exp_month: number;
-  exp_year: number;
-  created_at: string;
-};
-
-type HistoryItem = {
-  id: number;
-  status: string;
-  amount: number;
-  fincode_payment_id: string | null;
-  charged_at: string;
-};
-
-type PaginatedBillingHistory = {
-  data: HistoryItem[];
-  page: number;
-  per_page: number;
-  total: number;
-};
+import type { Subscription, Plan, Card, HistoryItem, PaginatedBillingHistory } from "../types/api";
 
 const FINCODE_MOUNT_ID = "fincode-ui-mount";
 const PER_PAGE = 10;

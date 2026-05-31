@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef } from "react";
 import type { ReactNode } from "react";
 
-import { LoadingButton } from "./LoadingButton";
+import type { ButtonVariant } from "../types/ui";
 
-type ConfirmDialogVariant = "primary" | "danger";
+import { LoadingButton } from "./LoadingButton";
 
 type ConfirmDialogProps = {
   open: boolean;
@@ -12,7 +12,7 @@ type ConfirmDialogProps = {
   confirmLabel?: string;
   cancelLabel?: string;
   loadingLabel?: string;
-  variant?: ConfirmDialogVariant;
+  variant?: Extract<ButtonVariant, "primary" | "danger">;
   isConfirming?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
