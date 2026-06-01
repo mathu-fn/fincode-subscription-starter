@@ -7,10 +7,9 @@ rate limiter between tests so individual tests are independent.
 
 from __future__ import annotations
 
-import asyncio
 import os
 from collections.abc import AsyncIterator, Iterator
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import pytest_asyncio
@@ -25,13 +24,6 @@ os.environ.setdefault("RATE_LIMIT_STORAGE_URI", "memory://")
 
 
 @pytest.fixture(scope="session")
-def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="session")
 def postgres_container() -> Iterator[PostgresContainer]:
     container = PostgresContainer("postgres:16-alpine", username="app", password="change-me", dbname="subscription_app")
     container.start()
@@ -42,7 +34,7 @@ def postgres_container() -> Iterator[PostgresContainer]:
 
 
 def _async_url_from(container: PostgresContainer) -> str:
-    raw = container.get_connection_url()  # e.g. postgresql+psycopg2://user:pass@host:port/db
+    raw = cast(str, container.get_connection_url())
     # testcontainers may use psycopg2 or psycopg as the driver suffix
     for old in ("+psycopg2", "+psycopg"):
         raw = raw.replace(old, "+asyncpg")
@@ -52,7 +44,7 @@ def _async_url_from(container: PostgresContainer) -> str:
 
 
 def _sync_url_from(container: PostgresContainer) -> str:
-    raw = container.get_connection_url()
+    raw = cast(str, container.get_connection_url())
     if "+asyncpg" in raw:
         raw = raw.replace("+asyncpg", "+psycopg")
     elif "+psycopg2" in raw:
@@ -74,10 +66,11 @@ def applied_migrations(postgres_container: PostgresContainer) -> str:
     # Clear the lru_cache so app.core.config picks up the new URL.
     from app.core.config import get_settings
 
-    get_settings.cache_clear()  # type: ignore[attr-defined]
+    get_settings.cache_clear()
+
+    from alembic.config import Config
 
     from alembic import command
-    from alembic.config import Config
 
     cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", sync_url)
@@ -87,7 +80,7 @@ def applied_migrations(postgres_container: PostgresContainer) -> str:
 
 
 @pytest_asyncio.fixture()
-async def db_engine(applied_migrations: str):
+async def db_engine(applied_migrations: str) -> AsyncIterator[Any]:
     engine = create_async_engine(applied_migrations, future=True, pool_pre_ping=True)
     try:
         yield engine
@@ -96,7 +89,7 @@ async def db_engine(applied_migrations: str):
 
 
 @pytest_asyncio.fixture()
-async def db_session(app_instance, db_engine) -> AsyncIterator[AsyncSession]:
+async def db_session(app_instance: Any, db_engine: Any) -> AsyncIterator[AsyncSession]:
     # Depend on app_instance so the per-test truncate has already run before
     # the test reads the DB.
     Session = async_sessionmaker(db_engine, expire_on_commit=False, autoflush=False, class_=AsyncSession)
@@ -106,11 +99,12 @@ async def db_session(app_instance, db_engine) -> AsyncIterator[AsyncSession]:
 
 
 @pytest_asyncio.fixture()
-async def app_instance(db_engine):
+async def app_instance(db_engine: Any) -> AsyncIterator[Any]:
     # Reset rate limiter storage so test order does not exhaust 5/minute limits.
-    from app.core.rate_limit import limiter
+    from app.core.rate_limit import get_limiter
+    from app.main import app
 
-    limiter.reset()
+    get_limiter().reset()
 
     # Truncate all application tables so tests do not see leftover state.
     from sqlalchemy import text
@@ -121,18 +115,8 @@ async def app_instance(db_engine):
         for table in reversed(Base.metadata.sorted_tables):
             await conn.execute(text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE'))
 
-    from app.main import app
-    from app.api import deps as deps_module
-
-    Session = async_sessionmaker(db_engine, expire_on_commit=False, autoflush=False, class_=AsyncSession)
-
-    async def _override_session() -> AsyncIterator[AsyncSession]:
-        async with Session() as session:
-            yield session
-
-    app.dependency_overrides[deps_module.get_session] = _override_session
-
-    yield app
+    async with app.router.lifespan_context(app):
+        yield app
 
     app.dependency_overrides.clear()
 

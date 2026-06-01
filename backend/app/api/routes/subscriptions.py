@@ -1,14 +1,13 @@
-from fastapi import APIRouter, Depends, Header, Query, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Annotated
+
+from fastapi import APIRouter, Header, Query, Request, status
 
 from app.api.deps import (
-    get_audit_logger_dep,
-    get_current_user,
-    get_fincode_client,
-    get_session,
+    CurrentUserDep,
+    SessionDep,
+    SubscriptionManagerDep,
 )
 from app.core.rate_limit import limiter
-from app.models.user import User
 from app.schemas.subscription import (
     BillingHistoryItem,
     CreateSubscriptionRequest,
@@ -16,22 +15,18 @@ from app.schemas.subscription import (
     PlanOut,
     SubscriptionOut,
 )
-from app.services.audit_logger import AuditLogger
-from app.services.fincode.client import FincodeClient
-from app.services.subscription_manager import SubscriptionManager
 
-router = APIRouter(prefix="/api/subscription", tags=["subscriptions"])
+router = APIRouter(prefix="/subscription", tags=["subscriptions"])
 
 
 @router.get("", response_model=SubscriptionOut | None)
 @limiter.limit("60/minute")
 async def get_subscription(
     request: Request,
-    db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
-    client: FincodeClient = Depends(get_fincode_client),
+    db: SessionDep,
+    user: CurrentUserDep,
+    manager: SubscriptionManagerDep,
 ) -> SubscriptionOut | None:
-    manager = SubscriptionManager(client)
     sub = await manager.get_active(db, user)
     if sub is None:
         return None
@@ -43,13 +38,13 @@ async def get_subscription(
 async def create_subscription(
     request: Request,
     payload: CreateSubscriptionRequest,
-    db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
-    client: FincodeClient = Depends(get_fincode_client),
-    audit: AuditLogger = Depends(get_audit_logger_dep),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=64),
+    db: SessionDep,
+    user: CurrentUserDep,
+    manager: SubscriptionManagerDep,
+    idempotency_key: Annotated[
+        str | None, Header(alias="Idempotency-Key", max_length=64)
+    ] = None,
 ) -> SubscriptionOut:
-    manager = SubscriptionManager(client, audit=audit)
     sub = await manager.subscribe(
         db,
         user,
@@ -66,12 +61,10 @@ async def create_subscription(
 @limiter.limit("5/minute")
 async def cancel_subscription(
     request: Request,
-    db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
-    client: FincodeClient = Depends(get_fincode_client),
-    audit: AuditLogger = Depends(get_audit_logger_dep),
+    db: SessionDep,
+    user: CurrentUserDep,
+    manager: SubscriptionManagerDep,
 ) -> SubscriptionOut:
-    manager = SubscriptionManager(client, audit=audit)
     sub = await manager.cancel(db, user)
     await db.commit()
     await db.refresh(sub)
@@ -82,10 +75,9 @@ async def cancel_subscription(
 @limiter.limit("60/minute")
 async def list_plans(
     request: Request,
-    user: User = Depends(get_current_user),
-    client: FincodeClient = Depends(get_fincode_client),
+    user: CurrentUserDep,
+    manager: SubscriptionManagerDep,
 ) -> list[PlanOut]:
-    manager = SubscriptionManager(client)
     plans = await manager.list_plans()
     return [
         PlanOut(
@@ -103,13 +95,12 @@ async def list_plans(
 @limiter.limit("60/minute")
 async def list_history(
     request: Request,
-    page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
-    client: FincodeClient = Depends(get_fincode_client),
+    db: SessionDep,
+    user: CurrentUserDep,
+    manager: SubscriptionManagerDep,
+    page: Annotated[int, Query(ge=1)] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedBillingHistory:
-    manager = SubscriptionManager(client)
     rows, total = await manager.list_history(db, user, page=page, per_page=per_page)
     return PaginatedBillingHistory(
         data=[BillingHistoryItem.model_validate(r) for r in rows],

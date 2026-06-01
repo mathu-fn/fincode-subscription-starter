@@ -7,9 +7,10 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import get_settings
 from app.core.exception_handlers import register_exception_handlers
-from app.core.logging import configure_logging, get_logger
+from app.core.lifespan import lifespan
+from app.core.logging import configure_logging
 from app.core.middleware import RequestLogMiddleware
-from app.core.rate_limit import limiter
+from app.core.rate_limit import configure_limiter
 
 
 def create_app() -> FastAPI:
@@ -17,20 +18,14 @@ def create_app() -> FastAPI:
 
     settings = get_settings()
 
-    if settings.fincode_mock_enabled:
-        # mock モードは fincode を一切叩かず固定のダミーデータを返す。
-        # 本番で誤ってこのモードのまま起動していないか気付けるよう、必ず警告を残す。
-        get_logger("app.startup").warning(
-            "fincode_mock_mode_enabled",
-            detail="FINCODE_MODE=mock: 実際の fincode API は呼び出されません（開発用）。",
-        )
-
     app = FastAPI(
         title="fincode Subscription OSS API",
         description="React フロントエンド向けの FastAPI バックエンドです。",
         version="0.1.0",
+        lifespan=lifespan,
     )
 
+    limiter = configure_limiter(settings)
     app.state.limiter = limiter
     app.add_middleware(SlowAPIMiddleware)
     app.add_middleware(RequestLogMiddleware)
@@ -53,17 +48,9 @@ def create_app() -> FastAPI:
     def healthcheck() -> dict[str, str]:
         return {"status": "ok", "service": "backend"}
 
-    # ルーターをここで登録する。関数内でインポートすることでマイグレーション時に
-    # モデルが読み込まれる際の循環インポートを防ぐ。
-    from app.api.routes import auth as auth_routes
-    from app.api.routes import cards as card_routes
-    from app.api.routes import subscriptions as subscription_routes
-    from app.api.routes import webhooks as webhook_routes
+    from app.api.router import api_router
 
-    app.include_router(auth_routes.router)
-    app.include_router(card_routes.router)
-    app.include_router(subscription_routes.router)
-    app.include_router(webhook_routes.router)
+    app.include_router(api_router)
 
     return app
 

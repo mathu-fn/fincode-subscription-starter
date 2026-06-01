@@ -12,17 +12,18 @@ from httpx import AsyncClient
 
 from app.api.deps import get_fincode_client
 from app.core.config import Settings
+from app.core.lifespan import create_fincode_client
 from app.services.fincode.client import FincodeHttpClient
 from app.services.fincode.mock_client import FincodeMockClient
 
 
 def test_get_fincode_client_returns_mock_when_mode_mock() -> None:
-    client = get_fincode_client(Settings(fincode_mode="mock"))
+    client = create_fincode_client(Settings(fincode_mode="mock"))
     assert isinstance(client, FincodeMockClient)
 
 
 def test_get_fincode_client_returns_http_client_by_default() -> None:
-    client = get_fincode_client(Settings(fincode_mode="live"))
+    client = create_fincode_client(Settings(fincode_mode="live"))
     assert isinstance(client, FincodeHttpClient)
 
 

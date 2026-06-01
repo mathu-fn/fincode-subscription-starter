@@ -1,36 +1,29 @@
-from collections.abc import AsyncIterator
-
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 
-from app.core.config import get_settings
 
-settings = get_settings()
-
-engine = create_async_engine(
-    settings.database_url,
-    echo=False,
-    pool_pre_ping=True,
-    future=True,
-)
-
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False,
-)
+def create_db_engine(database_url: str) -> AsyncEngine:
+    return create_async_engine(
+        database_url,
+        echo=False,
+        pool_pre_ping=True,
+        future=True,
+    )
 
 
-async def get_db() -> AsyncIterator[AsyncSession]:
-    """``AsyncSession`` を yield する FastAPI 依存関係。
+def create_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    """Create the application session factory.
 
     トランザクションは各サービスが ``session.begin()`` で開く責務を持つ。
-    終了時にセッションはクローズされるが、自動コミットは行わない。
+    リクエスト終了時にセッションはクローズされるが、自動コミットは行わない。
     """
-
-    async with AsyncSessionLocal() as session:
-        yield session
+    return async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False,
+    )

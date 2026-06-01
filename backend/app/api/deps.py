@@ -3,44 +3,65 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING
+from typing import Annotated, cast
 
 import jwt
-from fastapi import Depends, Header
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
-from app.core.db import get_db
 from app.core.exceptions import UnauthenticatedError
 from app.core.security import decode_token
+from app.models.user import User
 from app.services.audit_logger import AuditLogger, get_audit_logger
+from app.services.card_manager import CardManager
+from app.services.fincode.client import FincodeClient
+from app.services.subscription_manager import SubscriptionManager
 
-if TYPE_CHECKING:
-    from app.models.user import User
-    from app.services.fincode.client import FincodeClient
-
-
-async def get_session() -> AsyncIterator[AsyncSession]:
-    async for s in get_db():
-        yield s
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def _extract_bearer(authorization: str | None) -> str:
-    if not authorization:
+def get_settings_dep() -> Settings:
+    return get_settings()
+
+
+SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
+
+
+async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
+    sessionmaker = cast(
+        async_sessionmaker[AsyncSession] | None,
+        getattr(request.app.state, "db_sessionmaker", None),
+    )
+    if sessionmaker is None:
+        raise RuntimeError("Database sessionmaker is not initialized.")
+
+    async with sessionmaker() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+
+
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
+def _extract_bearer(credentials: HTTPAuthorizationCredentials | None) -> str:
+    if credentials is None:
         raise UnauthenticatedError("Missing Authorization header.")
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token:
+    if credentials.scheme.lower() != "bearer" or not credentials.credentials:
         raise UnauthenticatedError("Invalid Authorization header.")
-    return token
+    return credentials.credentials
 
 
 async def get_current_user(
-    authorization: str | None = Header(default=None),
-    db: AsyncSession = Depends(get_session),
-) -> "User":
-    from app.models.user import User
-
-    token = _extract_bearer(authorization)
+    request: Request,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    db: SessionDep,
+) -> User:
+    token = _extract_bearer(credentials)
     try:
         payload = decode_token(token)
     except jwt.ExpiredSignatureError as e:
@@ -59,23 +80,45 @@ async def get_current_user(
     user = await db.get(User, user_id)
     if user is None:
         raise UnauthenticatedError("User not found.")
+    request.state.user = user
     return user
 
 
-def get_fincode_client(settings: Settings = Depends(get_settings)) -> "FincodeClient":
-    if settings.fincode_mock_enabled:
-        from app.services.fincode.mock_client import FincodeMockClient
+CurrentUserDep = Annotated[User, Depends(get_current_user)]
 
-        return FincodeMockClient()
 
-    from app.services.fincode.client import FincodeHttpClient
+def get_fincode_client(request: Request) -> FincodeClient:
+    client = cast(FincodeClient | None, getattr(request.app.state, "fincode_client", None))
+    if client is None:
+        raise RuntimeError("fincode client is not initialized.")
+    return client
 
-    return FincodeHttpClient(
-        base_url=settings.fincode_base_url,
-        api_key=settings.fincode_api_key,
-        tenant_shop_id=settings.fincode_tenant_shop_id or None,
-    )
+
+FincodeClientDep = Annotated[FincodeClient, Depends(get_fincode_client)]
 
 
 def get_audit_logger_dep() -> AuditLogger:
     return get_audit_logger()
+
+
+AuditLoggerDep = Annotated[AuditLogger, Depends(get_audit_logger_dep)]
+
+
+def get_card_manager(
+    client: FincodeClientDep,
+    audit: AuditLoggerDep,
+) -> CardManager:
+    return CardManager(client, audit=audit)
+
+
+CardManagerDep = Annotated[CardManager, Depends(get_card_manager)]
+
+
+def get_subscription_manager(
+    client: FincodeClientDep,
+    audit: AuditLoggerDep,
+) -> SubscriptionManager:
+    return SubscriptionManager(client, audit=audit)
+
+
+SubscriptionManagerDep = Annotated[SubscriptionManager, Depends(get_subscription_manager)]

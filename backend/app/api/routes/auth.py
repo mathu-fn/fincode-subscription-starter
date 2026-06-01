@@ -1,9 +1,7 @@
-from fastapi import APIRouter, Depends, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Request, status
 
-from app.api.deps import get_audit_logger_dep, get_current_user, get_session
+from app.api.deps import AuditLoggerDep, CurrentUserDep, SessionDep
 from app.core.rate_limit import limiter
-from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
     LoginRequest,
@@ -13,9 +11,8 @@ from app.schemas.auth import (
     UserOut,
 )
 from app.services import auth_service
-from app.services.audit_logger import AuditLogger
 
-router = APIRouter(prefix="/api", tags=["auth"])
+router = APIRouter(tags=["auth"])
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -23,8 +20,8 @@ router = APIRouter(prefix="/api", tags=["auth"])
 async def register(
     request: Request,
     payload: RegisterRequest,
-    db: AsyncSession = Depends(get_session),
-    audit: AuditLogger = Depends(get_audit_logger_dep),
+    db: SessionDep,
+    audit: AuditLoggerDep,
 ) -> AuthResponse:
     user = await auth_service.register(db, payload)
     await audit.record(
@@ -45,7 +42,7 @@ async def register(
 async def login(
     request: Request,
     payload: LoginRequest,
-    db: AsyncSession = Depends(get_session),
+    db: SessionDep,
 ) -> AuthResponse:
     user = await auth_service.authenticate(db, payload)
     return auth_service.issue_token(user)
@@ -55,9 +52,9 @@ async def login(
 @limiter.limit("60/minute")
 async def logout(
     request: Request,
-    db: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
-    audit: AuditLogger = Depends(get_audit_logger_dep),
+    db: SessionDep,
+    user: CurrentUserDep,
+    audit: AuditLoggerDep,
 ) -> MessageResponse:
     await audit.record(
         db,
@@ -74,7 +71,7 @@ async def logout(
 @limiter.limit("60/minute")
 async def session_status(
     request: Request,
-    user: User = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> SessionStatusResponse:
     return SessionStatusResponse(authenticated=True, user=UserOut.model_validate(user))
 
@@ -83,6 +80,6 @@ async def session_status(
 @limiter.limit("60/minute")
 async def get_user(
     request: Request,
-    user: User = Depends(get_current_user),
+    user: CurrentUserDep,
 ) -> UserOut:
     return UserOut.model_validate(user)
