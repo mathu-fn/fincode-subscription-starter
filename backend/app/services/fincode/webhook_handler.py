@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -46,7 +46,7 @@ def _parse_charged_at(value: Any) -> datetime:
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
             pass
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class FincodeWebhookHandler:
@@ -89,7 +89,9 @@ class FincodeWebhookHandler:
 
         await db.commit()
 
-    async def _handle_payment(self, body: dict, db: AsyncSession, seen: WebhookEventSeen) -> None:
+    async def _handle_payment(
+        self, body: dict[str, Any], db: AsyncSession, seen: WebhookEventSeen
+    ) -> None:
         data = body.get("data", body)
         fincode_sub_id = data.get("subscription_id") or data.get("fincode_subscription_id")
         fincode_payment_id = data.get("payment_id") or data.get("id")
@@ -152,7 +154,7 @@ class FincodeWebhookHandler:
             after={"status": status_value, "amount": amount},
         )
 
-    async def _handle_cancellation(self, body: dict, db: AsyncSession) -> None:
+    async def _handle_cancellation(self, body: dict[str, Any], db: AsyncSession) -> None:
         data = body.get("data", body)
         fincode_sub_id = data.get("subscription_id") or data.get("id")
         if not fincode_sub_id:
@@ -164,7 +166,7 @@ class FincodeWebhookHandler:
             return
         if sub.status != SubscriptionStatus.CANCELLED:
             sub.status = SubscriptionStatus.CANCELLED
-            sub.cancelled_at = datetime.now(timezone.utc)
+            sub.cancelled_at = datetime.now(UTC)
         await self._audit.record(
             db,
             user_id=sub.user_id,

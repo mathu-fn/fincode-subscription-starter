@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -30,7 +31,7 @@ class Subscription(Base):
     plan_name: Mapped[str] = mapped_column(String(255), nullable=False)
     plan_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     plan_interval: Mapped[str] = mapped_column(String(32), nullable=False)
-    plan_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    plan_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     status: Mapped[str] = mapped_column(
         String(32), default=SubscriptionStatus.ACTIVE, nullable=False, index=True
     )

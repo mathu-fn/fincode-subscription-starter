@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any
+from collections.abc import Mapping, MutableMapping
+from typing import Any, cast
 
 import structlog
+from structlog.typing import FilteringBoundLogger
 
 _SENSITIVE_KEYS = {
     "password",
@@ -32,7 +34,7 @@ _SENSITIVE_KEYS = {
 }
 
 
-def _redact(_: Any, __: str, event_dict: dict) -> dict:
+def _redact(_: Any, __: str, event_dict: MutableMapping[str, Any]) -> Mapping[str, Any]:
     def scrub(value: Any) -> Any:
         if isinstance(value, dict):
             return {
@@ -43,7 +45,10 @@ def _redact(_: Any, __: str, event_dict: dict) -> dict:
             return [scrub(item) for item in value]
         return value
 
-    return scrub(event_dict)
+    scrubbed = scrub(dict(event_dict))
+    if isinstance(scrubbed, Mapping):
+        return scrubbed
+    return event_dict
 
 
 def configure_logging() -> None:
@@ -66,5 +71,5 @@ def configure_logging() -> None:
     )
 
 
-def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
-    return structlog.get_logger(name)
+def get_logger(name: str | None = None) -> FilteringBoundLogger:
+    return cast(FilteringBoundLogger, structlog.get_logger(name))

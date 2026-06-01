@@ -12,7 +12,7 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-def _envelope(code: str, message: str) -> dict:
+def _envelope(code: str, message: str) -> dict[str, dict[str, str]]:
     return {"detail": {"code": code, "message": message}}
 
 

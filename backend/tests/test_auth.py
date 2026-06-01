@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from httpx import AsyncClient
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -39,7 +40,7 @@ async def test_register_validation_error(client: AsyncClient) -> None:
     assert isinstance(body["detail"], list)
 
 
-async def test_login_success(client: AsyncClient, registered_user: dict) -> None:
+async def test_login_success(client: AsyncClient, registered_user: dict[str, Any]) -> None:
     response = await client.post(
         "/api/login",
         json={"email": registered_user["user"]["email"], "password": registered_user["password"]},
@@ -48,7 +49,9 @@ async def test_login_success(client: AsyncClient, registered_user: dict) -> None
     assert response.json()["access_token"]
 
 
-async def test_login_wrong_password(client: AsyncClient, registered_user: dict) -> None:
+async def test_login_wrong_password(
+    client: AsyncClient, registered_user: dict[str, Any]
+) -> None:
     response = await client.post(
         "/api/login",
         json={"email": registered_user["user"]["email"], "password": "wrong-password"},

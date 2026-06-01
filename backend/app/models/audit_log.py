@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -15,8 +16,8 @@ class AuditLog(Base):
     event: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     auditable_type: Mapped[str] = mapped_column(String(128), nullable=False)
     auditable_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    before: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    after: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    before: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    after: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

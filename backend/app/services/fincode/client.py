@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import httpx
 
@@ -31,7 +31,7 @@ class FincodeClient(Protocol):
         method: str,
         path: str,
         *,
-        json: dict | None = None,
+        json: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]: ...
 
@@ -72,7 +72,7 @@ class FincodeHttpClient:
         method: str,
         path: str,
         *,
-        json: dict | None = None,
+        json: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         headers: dict[str, str] = {}
@@ -98,7 +98,7 @@ class FincodeHttpClient:
                     self._breaker.record_success()
                     if status == 204 or not response.content:
                         return {}
-                    return response.json()
+                    return cast(dict[str, Any], response.json())
 
                 if status == 429:
                     retry_after_raw = response.headers.get("Retry-After")

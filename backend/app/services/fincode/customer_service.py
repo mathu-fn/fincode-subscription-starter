@@ -6,12 +6,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.services.fincode.base import BaseFincodeService
 from app.services.fincode.idempotency import idem_key
 
 
 class FincodeCustomerService(BaseFincodeService):
-    async def create(self, *, user_id: int, email: str, name: str) -> dict:
+    async def create(self, *, user_id: int, email: str, name: str) -> dict[str, Any]:
         body = {"id": f"local_user_{user_id}", "email": email, "name": name}
         return await self._client.request(
             "POST",

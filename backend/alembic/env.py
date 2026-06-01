@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from alembic import context
 from app.core.config import get_settings
 
 # Importing app.models triggers registration of every SQLAlchemy model.
 # Each milestone adds its own ``app/models/*.py`` and lists it in models/__init__.py.
-from app.models import Base  # noqa: F401
+from app.models import Base
 
 config = context.config
 

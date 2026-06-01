@@ -13,7 +13,8 @@ Webhook を配信した後に埋まる。
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from contextlib import suppress
+from datetime import UTC, datetime
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
@@ -131,7 +132,7 @@ class SubscriptionManager(BaseManager):
             if card.user_id != user.id:
                 raise ForbiddenError()
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             # exp_year は 4 桁で保存される。exp の日付が現在より前なら期限切れ。
             if (card.exp_year, card.exp_month) < (now.year, now.month):
                 raise UnprocessableError(code="expired_card")
@@ -181,10 +182,8 @@ class SubscriptionManager(BaseManager):
 
             sub.fincode_subscription_id = raw.get("id")
             if raw.get("current_period_end"):
-                try:
+                with suppress(TypeError, ValueError):
                     sub.current_period_end = datetime.fromisoformat(raw["current_period_end"])
-                except (TypeError, ValueError):
-                    pass
             await db.flush()
 
         await self._audit.record(
@@ -208,13 +207,13 @@ class SubscriptionManager(BaseManager):
         if sub.fincode_subscription_id is None:
             # ローカルのみの行; ステータスを反転するだけ。
             sub.status = SubscriptionStatus.CANCELLED
-            sub.cancelled_at = datetime.now(timezone.utc)
+            sub.cancelled_at = datetime.now(UTC)
             await db.flush()
             return sub
 
         await self._subs.cancel(fincode_subscription_id=sub.fincode_subscription_id)
         sub.status = SubscriptionStatus.CANCELLED
-        sub.cancelled_at = datetime.now(timezone.utc)
+        sub.cancelled_at = datetime.now(UTC)
         await db.flush()
 
         await self._audit.record(

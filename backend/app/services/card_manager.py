@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -116,7 +116,7 @@ class CardManager(BaseManager):
             customer_id=customer.fincode_customer_id,
             card_id=card.fincode_card_id,
         )
-        card.deleted_at = datetime.now(timezone.utc)
+        card.deleted_at = datetime.now(UTC)
         await db.flush()
         await self._audit.record(
             db,

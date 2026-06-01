@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from app.services.fincode.base import BaseFincodeService
 from app.services.fincode.idempotency import idem_key
@@ -15,8 +16,8 @@ class FincodeSubscriptionService(BaseFincodeService):
         card_id: str,
         plan_id: str,
         nonce: str,
-    ) -> dict:
-        start_date = datetime.now(timezone.utc).strftime("%Y/%m/%d")
+    ) -> dict[str, Any]:
+        start_date = datetime.now(UTC).strftime("%Y/%m/%d")
         return await self._client.request(
             "POST",
             "/v1/subscriptions",
@@ -30,7 +31,7 @@ class FincodeSubscriptionService(BaseFincodeService):
             idempotency_key=idem_key("sub.create", user_id, nonce),
         )
 
-    async def cancel(self, *, fincode_subscription_id: str) -> dict:
+    async def cancel(self, *, fincode_subscription_id: str) -> dict[str, Any]:
         return await self._client.request(
             "PUT",
             f"/v1/subscriptions/{fincode_subscription_id}/cancel",

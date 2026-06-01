@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from typing import Any
+
 from app.services.fincode.base import BaseFincodeService
 from app.services.fincode.idempotency import idem_key, token_fingerprint
 
 
 class FincodeCardService(BaseFincodeService):
-    async def create(self, *, user_id: int, customer_id: str, token: str, default_flag: str = "0") -> dict:
+    async def create(
+        self, *, user_id: int, customer_id: str, token: str, default_flag: str = "0"
+    ) -> dict[str, Any]:
         return await self._client.request(
             "POST",
             f"/v1/customers/{customer_id}/cards",
@@ -13,7 +17,7 @@ class FincodeCardService(BaseFincodeService):
             idempotency_key=idem_key("card.create", user_id, token_fingerprint(token)),
         )
 
-    async def delete(self, *, customer_id: str, card_id: str) -> dict:
+    async def delete(self, *, customer_id: str, card_id: str) -> dict[str, Any]:
         return await self._client.request(
             "DELETE",
             f"/v1/customers/{customer_id}/cards/{card_id}",

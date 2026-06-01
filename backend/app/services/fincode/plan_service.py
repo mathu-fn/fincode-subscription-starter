@@ -39,13 +39,13 @@ class FincodePlanService(BaseFincodeService):
         self._plan_cache: dict[str, tuple[float, PlanData]] = {}
 
     @staticmethod
-    def _is_active(raw: dict) -> bool:
+    def _is_active(raw: dict[str, Any]) -> bool:
         # fincode は削除済みプランを delete_flag="1"（文字列）でマークする。
         # それ以外の値（フィールド自体が存在しない場合も含む）は利用可能として扱う。
         return str(raw.get("delete_flag", "0")) != "1"
 
     @staticmethod
-    def _normalise(raw: dict) -> PlanData:
+    def _normalise(raw: dict[str, Any]) -> PlanData:
         amount = raw.get("amount", "0")
         try:
             amount_int = int(amount)
@@ -65,8 +65,12 @@ class FincodePlanService(BaseFincodeService):
         if self._list_cache and (now - self._list_cache[0]) < self._cache_ttl:
             return self._list_cache[1]
         response = await self._client.request("GET", "/v1/plans")
-        items = response.get("list", []) if isinstance(response, dict) else []
-        result = [self._normalise(item) for item in items if self._is_active(item)]
+        items = response.get("list", [])
+        result = [
+            self._normalise(item)
+            for item in items
+            if isinstance(item, dict) and self._is_active(item)
+        ]
         self._list_cache = (now, result)
         return result
 
