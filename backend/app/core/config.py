@@ -1,7 +1,7 @@
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Self
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -58,6 +58,23 @@ class Settings(BaseSettings):
     def fincode_mock_enabled(self) -> bool:
         """fincode モッククライアントを使うべきか（``FINCODE_MODE=mock``）。"""
         return self.fincode_mode.strip().lower() == "mock"
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.strip().lower() in {"prod", "production"}
+
+    @model_validator(mode="after")
+    def _validate_production_safety(self) -> Self:
+        if not self.is_production:
+            return self
+
+        if self.fincode_mock_enabled:
+            raise ValueError("FINCODE_MODE=mock is not allowed in production.")
+        if self.jwt_secret_key.startswith("change-this-in-production"):
+            raise ValueError("JWT_SECRET_KEY must be changed in production.")
+        if self.fincode_webhook_secret == "change-me":
+            raise ValueError("FINCODE_WEBHOOK_SECRET must be changed in production.")
+        return self
 
 
 @lru_cache
