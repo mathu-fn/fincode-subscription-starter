@@ -59,6 +59,20 @@ FREE_PLAN: PlanData = {
 }
 
 
+def _apply_plan_snapshot(sub: Subscription, plan: PlanData) -> None:
+    sub.fincode_plan_id = plan["fincode_plan_id"]
+    sub.plan_name = plan["name"]
+    sub.plan_amount = plan["amount"]
+    sub.plan_interval = plan["interval"]
+    sub.plan_snapshot = plan["raw"]
+
+
+def _apply_current_period_end(sub: Subscription, raw: dict[str, object]) -> None:
+    if raw.get("current_period_end"):
+        with suppress(TypeError, ValueError):
+            sub.current_period_end = datetime.fromisoformat(str(raw["current_period_end"]))
+
+
 class SubscriptionManager(BaseManager):
     def __init__(self, client: FincodeClient, audit: AuditLogger | None = None) -> None:
         super().__init__(client, audit)
@@ -83,6 +97,26 @@ class SubscriptionManager(BaseManager):
     async def list_plans(self) -> list[PlanData]:
         # フリープランを先頭に注入してから fincode のプランを並べる。
         return [FREE_PLAN, *await self._plans.list_active()]
+
+    async def _get_usable_card(
+        self,
+        db: AsyncSession,
+        user: User,
+        card_id: int,
+        *,
+        missing_code: str = "card_not_found",
+    ) -> FincodeCard:
+        card = await db.get(FincodeCard, card_id)
+        if card is None or card.deleted_at is not None:
+            raise NotFoundError("Card not found.", code=missing_code)
+        if card.user_id != user.id:
+            raise ForbiddenError()
+
+        now = datetime.now(UTC)
+        # exp_year は 4 桁で保存される。exp の日付が現在より前なら期限切れ。
+        if (card.exp_year, card.exp_month) < (now.year, now.month):
+            raise UnprocessableError(code="expired_card")
+        return card
 
     async def subscribe(
         self,
@@ -126,17 +160,9 @@ class SubscriptionManager(BaseManager):
             if card_id is None:
                 raise UnprocessableError(code="card_required")
             # このユーザーのカードであり、削除・期限切れでないことを確認する。
-            card = await db.get(FincodeCard, card_id)
-            if card is None or card.deleted_at is not None:
-                raise NotFoundError("Card not found.", code="subscription_not_found")
-            if card.user_id != user.id:
-                raise ForbiddenError()
-
-            now = datetime.now(UTC)
-            # exp_year は 4 桁で保存される。exp の日付が現在より前なら期限切れ。
-            if (card.exp_year, card.exp_month) < (now.year, now.month):
-                raise UnprocessableError(code="expired_card")
-
+            card = await self._get_usable_card(
+                db, user, card_id, missing_code="subscription_not_found"
+            )
             customer = await self._customers.ensure(db, user)
 
         # クライアントの Idempotency-Key をノンスとして再利用することで、
@@ -150,13 +176,9 @@ class SubscriptionManager(BaseManager):
             fincode_card_id=card.id if card is not None else None,
             fincode_subscription_id=None,
             nonce=nonce,
-            fincode_plan_id=plan["fincode_plan_id"],
-            plan_name=plan["name"],
-            plan_amount=plan["amount"],
-            plan_interval=plan["interval"],
-            plan_snapshot=plan["raw"],
             status=SubscriptionStatus.ACTIVE,
         )
+        _apply_plan_snapshot(sub, plan)
         db.add(sub)
         try:
             await db.flush()
@@ -181,9 +203,7 @@ class SubscriptionManager(BaseManager):
                 raise
 
             sub.fincode_subscription_id = raw.get("id")
-            if raw.get("current_period_end"):
-                with suppress(TypeError, ValueError):
-                    sub.current_period_end = datetime.fromisoformat(raw["current_period_end"])
+            _apply_current_period_end(sub, raw)
             await db.flush()
 
         await self._audit.record(
@@ -196,6 +216,89 @@ class SubscriptionManager(BaseManager):
                 "fincode_subscription_id": sub.fincode_subscription_id,
                 "plan_name": sub.plan_name,
                 "plan_amount": sub.plan_amount,
+            },
+        )
+        return sub
+
+    async def change_plan(
+        self,
+        db: AsyncSession,
+        user: User,
+        *,
+        plan_id: str,
+        card_id: int | None = None,
+        idempotency_key: str | None = None,
+    ) -> Subscription:
+        sub = await self.get_active(db, user)
+        if sub is None:
+            raise NotFoundError(code="subscription_not_found")
+        if sub.fincode_plan_id == plan_id:
+            return sub
+
+        before = {
+            "fincode_subscription_id": sub.fincode_subscription_id,
+            "fincode_plan_id": sub.fincode_plan_id,
+            "plan_name": sub.plan_name,
+            "plan_amount": sub.plan_amount,
+            "plan_interval": sub.plan_interval,
+        }
+
+        if plan_id == FREE_PLAN_ID:
+            if sub.fincode_subscription_id is not None:
+                await self._subs.cancel(fincode_subscription_id=sub.fincode_subscription_id)
+            _apply_plan_snapshot(sub, FREE_PLAN)
+            sub.fincode_customer_id = None
+            sub.fincode_card_id = None
+            sub.fincode_subscription_id = None
+            sub.current_period_end = None
+            sub.cancelled_at = None
+            sub.status = SubscriptionStatus.ACTIVE
+            await db.flush()
+        else:
+            plan = await self._plans.fetch(plan_id)
+            nonce = idempotency_key or new_nonce()
+            if sub.fincode_subscription_id is None:
+                if card_id is None:
+                    raise UnprocessableError(code="card_required")
+                card = await self._get_usable_card(db, user, card_id)
+                customer = await self._customers.ensure(db, user)
+                raw = await self._subs.create(
+                    user_id=user.id,
+                    customer_id=customer.fincode_customer_id,
+                    card_id=card.fincode_card_id,
+                    plan_id=plan["fincode_plan_id"],
+                    nonce=nonce,
+                )
+                sub.fincode_customer_id = customer.id
+                sub.fincode_card_id = card.id
+                sub.fincode_subscription_id = raw.get("id")
+                _apply_current_period_end(sub, raw)
+            else:
+                raw = await self._subs.update_plan(
+                    user_id=user.id,
+                    fincode_subscription_id=sub.fincode_subscription_id,
+                    plan_id=plan["fincode_plan_id"],
+                    nonce=nonce,
+                )
+                _apply_current_period_end(sub, raw)
+            _apply_plan_snapshot(sub, plan)
+            sub.cancelled_at = None
+            sub.status = SubscriptionStatus.ACTIVE
+            await db.flush()
+
+        await self._audit.record(
+            db,
+            user_id=user.id,
+            event="subscription.change_plan",
+            auditable_type=self.auditable_type,
+            auditable_id=sub.id,
+            before=before,
+            after={
+                "fincode_subscription_id": sub.fincode_subscription_id,
+                "fincode_plan_id": sub.fincode_plan_id,
+                "plan_name": sub.plan_name,
+                "plan_amount": sub.plan_amount,
+                "plan_interval": sub.plan_interval,
             },
         )
         return sub

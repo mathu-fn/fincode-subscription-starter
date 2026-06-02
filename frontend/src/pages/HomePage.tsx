@@ -177,6 +177,36 @@ export function HomePage() {
     }
   }
 
+  async function changePlan(planId: string) {
+    if (!sub) return;
+    const isFree = planId === FREE_PLAN_ID;
+    const isFreeToPaid = sub.fincode_plan_id === FREE_PLAN_ID && !isFree;
+    if (isFreeToPaid && !selectedCardId) {
+      setError(new Error("カードを選択してください。"));
+      return;
+    }
+    setError(null);
+    setSubmittingPlan(planId);
+    try {
+      const updated = await apiFetch<Subscription>("/api/subscription", {
+        method: "PATCH",
+        body: JSON.stringify({
+          fincode_plan_id: planId,
+          ...(isFreeToPaid ? { card_id: selectedCardId } : {})
+        })
+      });
+      setSub(updated);
+      const wasOnPageOne = page === 1;
+      setPage(1);
+      if (wasOnPageOne) await refreshHistory(1);
+      window.location.hash = "subscription";
+    } catch (e) {
+      setError(e as ApiError);
+    } finally {
+      setSubmittingPlan(null);
+    }
+  }
+
   async function confirmCancel() {
     if (!sub) return;
     setCancelling(true);
@@ -407,30 +437,45 @@ export function HomePage() {
               </label>
             )}
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {plans.map((plan) => (
-                <li key={plan.fincode_plan_id} className={`${cardClass} grid content-start gap-2`}>
-                  <h3 className="text-lg font-bold text-sky-950">{plan.name}</h3>
-                  <p className="text-2xl font-bold text-slate-900">
-                    {plan.amount === 0 ? (
-                      "無料"
-                    ) : (
-                      <>
-                        ¥{plan.amount.toLocaleString()} <span className="text-base font-normal text-slate-500">/ {plan.interval}</span>
-                      </>
-                    )}
-                  </p>
-                  <LoadingButton
-                    type="button"
-                    disabled={(plan.amount > 0 && cards.length === 0) || submittingPlan !== null}
-                    isLoading={submittingPlan === plan.fincode_plan_id}
-                    loadingLabel="登録中..."
-                    title={plan.amount > 0 && cards.length === 0 ? "先にカードを登録してください" : undefined}
-                    onClick={() => subscribe(plan.fincode_plan_id)}
-                  >
-                    このプランを契約
-                  </LoadingButton>
-                </li>
-              ))}
+              {plans.map((plan) => {
+                const activeSub = sub?.status === "active" ? sub : null;
+                const isCurrentPlan = activeSub?.fincode_plan_id === plan.fincode_plan_id;
+                const isFreeToPaid =
+                  activeSub?.fincode_plan_id === FREE_PLAN_ID && plan.fincode_plan_id !== FREE_PLAN_ID;
+                const needsCard = plan.amount > 0 && (!activeSub || isFreeToPaid);
+                const cardMissing = needsCard && cards.length === 0;
+                const buttonLabel = isCurrentPlan
+                  ? "現在のプラン"
+                  : activeSub
+                    ? "このプランに変更"
+                    : "このプランを契約";
+                return (
+                  <li key={plan.fincode_plan_id} className={`${cardClass} grid content-start gap-2`}>
+                    <h3 className="text-lg font-bold text-sky-950">{plan.name}</h3>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {plan.amount === 0 ? (
+                        "無料"
+                      ) : (
+                        <>
+                          ¥{plan.amount.toLocaleString()} <span className="text-base font-normal text-slate-500">/ {plan.interval}</span>
+                        </>
+                      )}
+                    </p>
+                    <LoadingButton
+                      type="button"
+                      disabled={isCurrentPlan || cardMissing || submittingPlan !== null}
+                      isLoading={submittingPlan === plan.fincode_plan_id}
+                      loadingLabel={activeSub ? "変更中..." : "登録中..."}
+                      title={cardMissing ? "先にカードを登録してください" : undefined}
+                      onClick={() =>
+                        activeSub ? changePlan(plan.fincode_plan_id) : subscribe(plan.fincode_plan_id)
+                      }
+                    >
+                      {buttonLabel}
+                    </LoadingButton>
+                  </li>
+                );
+              })}
             </ul>
           </>
         )}

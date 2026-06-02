@@ -1,6 +1,8 @@
 export type Subscription = {
   id: number;
   status: string;
+  fincode_subscription_id: string | null;
+  fincode_plan_id: string;
   plan_name: string;
   plan_amount: number;
   plan_interval: string;

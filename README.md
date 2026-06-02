@@ -260,6 +260,10 @@ Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/api/webhooks/fincode'
 
 `DELETE /api/subscription` は fincode へ即時解約を要求し、ローカル `subscriptions.status` を `cancelled` へ、`cancelled_at` を `now()` へ更新します。請求期間末（`current_period_end`）までのアクセス可否はアプリの業務判断で、Webhook 受信時に `subscription_results` と `status` が更新されます。
 
+### プラン変更ポリシー
+
+`PATCH /api/subscription` は、解約と再契約を分けて実行せず、既存のアクティブな `subscriptions` 行を同じ行のまま更新します。有料プラン同士の変更では fincode のサブスクリプション更新 API に新しい `plan_id` を渡します。日割り（proration）はこのスターターでは計算しません。
+
 ### JWT の保管について
 
 フロントエンドは JWT を `localStorage` に保存します。XSS 経由でトークンを盗まれない設計（Content Security Policy、依存ライブラリの監査、`dangerouslySetInnerHTML` の禁止、ストアド XSS テスト）を本番投入条件にしてください。

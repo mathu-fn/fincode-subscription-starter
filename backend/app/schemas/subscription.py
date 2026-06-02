@@ -9,6 +9,12 @@ class CreateSubscriptionRequest(BaseModel):
     card_id: int | None = None
 
 
+class ChangeSubscriptionPlanRequest(BaseModel):
+    fincode_plan_id: str = Field(min_length=1, max_length=128)
+    # フリープランから有料プランへ変更する場合はカードが必要。
+    card_id: int | None = None
+
+
 class SubscriptionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
