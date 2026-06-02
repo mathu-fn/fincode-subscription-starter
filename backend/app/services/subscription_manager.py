@@ -342,7 +342,8 @@ class SubscriptionManager(BaseManager):
             "cancel_at_period_end": False,
         }
         raw = await self._subs.cancel(fincode_subscription_id=sub.fincode_subscription_id)
-        apply_current_period_end(sub, raw)
+        # 解約レスポンスは支払い済み期限を縮めてはならない（only_extend）。
+        apply_current_period_end(sub, raw, only_extend=True)
         sub.cancelled_at = datetime.now(UTC)
         if has_future_period(sub):
             sub.status = SubscriptionStatus.ACTIVE
