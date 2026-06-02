@@ -42,6 +42,12 @@ from app.core.exceptions import (
             "An active subscription already exists for this user.",
         ),
         (
+            ConflictError(code="subscription_cancel_scheduled"),
+            "subscription_cancel_scheduled",
+            409,
+            "The subscription is already scheduled for cancellation.",
+        ),
+        (
             ConflictError(code="card_in_use"),
             "card_in_use",
             409,
