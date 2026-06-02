@@ -6,17 +6,16 @@
 ``ConflictError`` を最初の協調的なガードとして発生させるが、
 インデックスこそがガードをレースセーフにしている。
 
-キャンセルは同期的: ローカル行の ``status`` を即座に ``'cancelled'`` に反転させる。
-``current_period_end`` と最終的な ``subscription_results`` 行は、fincode が
-Webhook を配信した後に埋まる。
+有料契約のキャンセルは請求停止を即時に予約し、``current_period_end`` までは
+ローカル行を ``active`` のまま保持する。期間が切れた解約予約は、次の状態変更前に
+``cancelled`` へ遅延確定する。
 """
 
 from __future__ import annotations
 
-from contextlib import suppress
 from datetime import UTC, datetime
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,6 +37,12 @@ from app.services.fincode.client import FincodeClient
 from app.services.fincode.idempotency import new_nonce
 from app.services.fincode.plan_service import FincodePlanService, PlanData
 from app.services.fincode.subscription_service import FincodeSubscriptionService
+from app.services.subscription_periods import (
+    apply_current_period_end,
+    cancel_at_period_end,
+    has_future_period,
+    usable_subscription_conditions,
+)
 
 # 0円フリープランはアプリ側で合成する番兵プラン。fincode には存在しない
 # （fincode は 0 円プランを作成できない）。fincode のプランIDは生成トークン
@@ -67,12 +72,6 @@ def _apply_plan_snapshot(sub: Subscription, plan: PlanData) -> None:
     sub.plan_snapshot = plan["raw"]
 
 
-def _apply_current_period_end(sub: Subscription, raw: dict[str, object]) -> None:
-    if raw.get("current_period_end"):
-        with suppress(TypeError, ValueError):
-            sub.current_period_end = datetime.fromisoformat(str(raw["current_period_end"]))
-
-
 class SubscriptionManager(BaseManager):
     def __init__(self, client: FincodeClient, audit: AuditLogger | None = None) -> None:
         super().__init__(client, audit)
@@ -84,15 +83,31 @@ class SubscriptionManager(BaseManager):
         return "subscription"
 
     async def get_active(self, db: AsyncSession, user: User) -> Subscription | None:
+        now = datetime.now(UTC)
         stmt = (
             select(Subscription)
             .where(
-                Subscription.user_id == user.id, Subscription.status == SubscriptionStatus.ACTIVE
+                Subscription.user_id == user.id,
+                *usable_subscription_conditions(now),
             )
             .order_by(desc(Subscription.created_at))
             .limit(1)
         )
         return (await db.execute(stmt)).scalar_one_or_none()
+
+    async def _finalize_elapsed_cancellations(self, db: AsyncSession, user: User) -> None:
+        now = datetime.now(UTC)
+        stmt = select(Subscription).where(
+            Subscription.user_id == user.id,
+            Subscription.status == SubscriptionStatus.ACTIVE,
+            Subscription.cancelled_at.is_not(None),
+            or_(Subscription.current_period_end.is_(None), Subscription.current_period_end <= now),
+        )
+        rows = list((await db.execute(stmt)).scalars().all())
+        for sub in rows:
+            sub.status = SubscriptionStatus.CANCELLED
+        if rows:
+            await db.flush()
 
     async def list_plans(self) -> list[PlanData]:
         # フリープランを先頭に注入してから fincode のプランを並べる。
@@ -127,6 +142,8 @@ class SubscriptionManager(BaseManager):
         card_id: int | None = None,
         idempotency_key: str | None = None,
     ) -> Subscription:
+        await self._finalize_elapsed_cancellations(db, user)
+
         # Idempotency-Key リプレイ: 同じクライアント提供キーによるリトライは、
         # 新しい fincode 契約を開始する代わりに以前の成功した行を返す。
         # これがなければ、レスポンスが途中で失われた後のクライアントリトライが
@@ -137,7 +154,7 @@ class SubscriptionManager(BaseManager):
                 select(Subscription).where(
                     Subscription.user_id == user.id,
                     Subscription.nonce == idempotency_key,
-                    Subscription.status == SubscriptionStatus.ACTIVE,
+                    *usable_subscription_conditions(datetime.now(UTC)),
                 )
             )
             if prior is not None:
@@ -203,7 +220,7 @@ class SubscriptionManager(BaseManager):
                 raise
 
             sub.fincode_subscription_id = raw.get("id")
-            _apply_current_period_end(sub, raw)
+            apply_current_period_end(sub, raw)
             await db.flush()
 
         await self._audit.record(
@@ -229,9 +246,12 @@ class SubscriptionManager(BaseManager):
         card_id: int | None = None,
         idempotency_key: str | None = None,
     ) -> Subscription:
+        await self._finalize_elapsed_cancellations(db, user)
         sub = await self.get_active(db, user)
         if sub is None:
             raise NotFoundError(code="subscription_not_found")
+        if cancel_at_period_end(sub):
+            raise ConflictError(code="subscription_cancel_scheduled")
         if sub.fincode_plan_id == plan_id:
             return sub
 
@@ -272,7 +292,7 @@ class SubscriptionManager(BaseManager):
                 sub.fincode_customer_id = customer.id
                 sub.fincode_card_id = card.id
                 sub.fincode_subscription_id = raw.get("id")
-                _apply_current_period_end(sub, raw)
+                apply_current_period_end(sub, raw)
             else:
                 raw = await self._subs.update_plan(
                     user_id=user.id,
@@ -280,7 +300,7 @@ class SubscriptionManager(BaseManager):
                     plan_id=plan["fincode_plan_id"],
                     nonce=nonce,
                 )
-                _apply_current_period_end(sub, raw)
+                apply_current_period_end(sub, raw)
             _apply_plan_snapshot(sub, plan)
             sub.cancelled_at = None
             sub.status = SubscriptionStatus.ACTIVE
@@ -304,9 +324,12 @@ class SubscriptionManager(BaseManager):
         return sub
 
     async def cancel(self, db: AsyncSession, user: User) -> Subscription:
+        await self._finalize_elapsed_cancellations(db, user)
         sub = await self.get_active(db, user)
         if sub is None:
             raise NotFoundError(code="subscription_not_found")
+        if cancel_at_period_end(sub):
+            return sub
         if sub.fincode_subscription_id is None:
             # ローカルのみの行; ステータスを反転するだけ。
             sub.status = SubscriptionStatus.CANCELLED
@@ -314,9 +337,17 @@ class SubscriptionManager(BaseManager):
             await db.flush()
             return sub
 
-        await self._subs.cancel(fincode_subscription_id=sub.fincode_subscription_id)
-        sub.status = SubscriptionStatus.CANCELLED
+        before = {
+            "status": sub.status,
+            "cancel_at_period_end": False,
+        }
+        raw = await self._subs.cancel(fincode_subscription_id=sub.fincode_subscription_id)
+        apply_current_period_end(sub, raw)
         sub.cancelled_at = datetime.now(UTC)
+        if has_future_period(sub):
+            sub.status = SubscriptionStatus.ACTIVE
+        else:
+            sub.status = SubscriptionStatus.CANCELLED
         await db.flush()
 
         await self._audit.record(
@@ -325,10 +356,14 @@ class SubscriptionManager(BaseManager):
             event="subscription.cancel",
             auditable_type=self.auditable_type,
             auditable_id=sub.id,
-            before={"status": SubscriptionStatus.ACTIVE},
+            before=before,
             after={
-                "status": SubscriptionStatus.CANCELLED,
+                "status": sub.status,
+                "cancel_at_period_end": cancel_at_period_end(sub),
                 "cancelled_at": sub.cancelled_at.isoformat(),
+                "current_period_end": (
+                    sub.current_period_end.isoformat() if sub.current_period_end else None
+                ),
             },
         )
         return sub

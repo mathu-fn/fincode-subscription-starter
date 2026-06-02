@@ -33,8 +33,8 @@ class FincodeSubscriptionService(BaseFincodeService):
 
     async def cancel(self, *, fincode_subscription_id: str) -> dict[str, Any]:
         return await self._client.request(
-            "PUT",
-            f"/v1/subscriptions/{fincode_subscription_id}/cancel",
+            "DELETE",
+            f"/v1/subscriptions/{fincode_subscription_id}",
         )
 
     async def update_plan(

@@ -2,6 +2,7 @@
 
 ERROR_DEFAULTS: dict[str, str] = {
     "active_subscription_exists": "An active subscription already exists for this user.",
+    "subscription_cancel_scheduled": "The subscription is already scheduled for cancellation.",
     "card_in_use": "The card is referenced by an active subscription.",
     "card_not_found": "The card does not exist.",
     "expired_card": "The card has expired.",

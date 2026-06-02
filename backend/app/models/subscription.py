@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, func
@@ -45,3 +45,16 @@ class Subscription(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    @property
+    def cancel_at_period_end(self) -> bool:
+        if (
+            self.status != SubscriptionStatus.ACTIVE
+            or self.cancelled_at is None
+            or self.current_period_end is None
+        ):
+            return False
+        period_end = self.current_period_end
+        if period_end.tzinfo is None:
+            period_end = period_end.replace(tzinfo=UTC)
+        return period_end > datetime.now(UTC)

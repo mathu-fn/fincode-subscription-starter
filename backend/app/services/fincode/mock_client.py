@@ -109,7 +109,7 @@ class FincodeMockClient:
                 "plan_id": body.get("plan_id"),
                 "current_period_end": period_end.isoformat(),
             }
-        if method == "PUT" and path.endswith("/cancel"):
+        if method == "DELETE" and path.startswith("/v1/subscriptions/"):
             return {"status": "canceled"}
 
         # 想定外のパスはモックでは空の成功として握りつぶす。

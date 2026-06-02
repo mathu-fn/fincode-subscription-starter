@@ -221,6 +221,12 @@ paths:
       tags: [サブスクリプション]
       operationId: cancelSubscription
       summary: サブスクリプション解約
+      description: |
+        現在のサブスクリプションの次回以降の請求を停止します。
+
+        有料契約で `current_period_end` が未来の場合、レスポンスは `status: active` と
+        `cancel_at_period_end: true` を返し、ユーザーは `current_period_end` まで利用できます。
+        フリープラン、または期間末を判断できない契約は即時に `status: cancelled` になります。
       security:
         - bearerAuth: []
       x-rateLimit: 5/min
@@ -505,7 +511,7 @@ components:
             フリープランから有料プランへ変更する場合に必要な支払いカードID。有料プラン同士の変更では既存の fincode サブスクリプションの請求先を維持するため不要。
     Subscription:
       type: object
-      required: [id, status, fincode_plan_id, plan_name, plan_amount, created_at]
+      required: [id, status, fincode_plan_id, plan_name, plan_amount, cancel_at_period_end, created_at]
       properties:
         id:
           type: integer
@@ -527,6 +533,16 @@ components:
           type: string
           format: date-time
           nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            解約予約中は解約申込日時、即時失効済みの場合は解約日時。
+        cancel_at_period_end:
+          type: boolean
+          description: |
+            `true` の場合、次回以降の請求は停止済みで、`current_period_end` までは利用可能。
         created_at:
           type: string
           format: date-time
