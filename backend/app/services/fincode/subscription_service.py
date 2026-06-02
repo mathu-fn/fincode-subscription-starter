@@ -36,3 +36,21 @@ class FincodeSubscriptionService(BaseFincodeService):
             "PUT",
             f"/v1/subscriptions/{fincode_subscription_id}/cancel",
         )
+
+    async def update_plan(
+        self,
+        *,
+        user_id: int,
+        fincode_subscription_id: str,
+        plan_id: str,
+        nonce: str,
+    ) -> dict[str, Any]:
+        return await self._client.request(
+            "PUT",
+            f"/v1/subscriptions/{fincode_subscription_id}",
+            json={
+                "pay_type": "Card",
+                "plan_id": plan_id,
+            },
+            idempotency_key=idem_key("sub.change_plan", user_id, nonce),
+        )

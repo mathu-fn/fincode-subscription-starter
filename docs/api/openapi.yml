@@ -176,6 +176,47 @@ paths:
           $ref: '#/components/responses/ApplicationError'
         '422':
           $ref: '#/components/responses/ValidationError'
+    patch:
+      tags: [サブスクリプション]
+      operationId: changeSubscriptionPlan
+      summary: サブスクリプションのプラン変更
+      description: |
+        アクティブな契約を解約せず、同じアプリ側契約行のプラン情報を更新します。有料プラン同士の変更では fincode のサブスクリプション更新 API に `plan_id` を渡します。日割り計算（proration）はこのスターターでは行いません。
+
+        fincode 側の制約により、初回課金済みのサブスクリプション更新が拒否される場合があります。その場合は決済サービス連携エラーとして返されます。
+      security:
+        - bearerAuth: []
+      x-rateLimit: 5/min
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: |
+            クライアントが生成する重複防止キー（最大 64 文字）。fincode のサブスクリプション更新または作成に同じ Idempotency-Key を伝搬します。
+          schema:
+            type: string
+            maxLength: 64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeSubscriptionPlanRequest'
+      responses:
+        '200':
+          description: プラン変更成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ApplicationError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '502':
+          $ref: '#/components/responses/ApplicationError'
     delete:
       tags: [サブスクリプション]
       operationId: cancelSubscription
@@ -449,6 +490,19 @@ components:
           nullable: true
           description: |
             支払いカードID。有料プランでは必須。フリープラン（`fincode_plan_id="free"`）では不要。
+    ChangeSubscriptionPlanRequest:
+      type: object
+      required: [fincode_plan_id]
+      properties:
+        fincode_plan_id:
+          type: string
+          description: |
+            変更先プランのID。`"free"` は 0 円フリープラン（アプリ側で合成、fincode 非依存）。
+        card_id:
+          type: integer
+          nullable: true
+          description: |
+            フリープランから有料プランへ変更する場合に必要な支払いカードID。有料プラン同士の変更では既存の fincode サブスクリプションの請求先を維持するため不要。
     Subscription:
       type: object
       required: [id, status, fincode_plan_id, plan_name, plan_amount, created_at]

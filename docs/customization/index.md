@@ -25,11 +25,20 @@
 
 プロダクト側でプラン設定を管理する明確な理由がない限り、変更可能なローカルの `plans` テーブルは追加しないでください。
 
+## 単一契約のプラン変更
+
+このスターターは `PATCH /api/subscription` で、既存のアクティブ契約を解約せずに同じ `subscriptions` 行のプラン情報を更新します。1ユーザー1アクティブ契約の partial unique index は維持したまま、有料プラン同士の変更では fincode のサブスクリプション更新 API に新しい `plan_id` を渡します。
+
+フリープランはアプリ側の合成プランなので、free から有料プランへ変更する場合だけ `card_id` が必要です。有料プランから free へ変更する場合は fincode 側のサブスクリプションを停止し、ローカル行を free に更新します。
+
+このスターターは日割り（proration）を計算しません。即時差額請求、次回請求日からの適用、クレジット残高などを扱う場合は、`app/services/subscription_manager.py` の `change_plan` と `subscription_results` / 監査ログの記録方針を拡張してください。
+
 ## 拡張しやすい箇所
 
 | 目的 | 着手地点 |
 | --- | --- |
 | メール認証 | Auth service、user model、メール送信サービス、保護ルートの dependency |
+| 単一契約のプラン変更ルール（日割り・次回更新予約） | `SubscriptionManager.change_plan`、API schema、契約 UI |
 | 1 ユーザー複数アクティブ契約 | アクティブ契約の unique 制約と契約 UI を見直す |
 | クーポン | マスターを fincode 側に置くか、ローカルに置くかを決めて、優先順位をドキュメント化する |
 | Webhook 駆動の支払い催促（Dunning） | [webhooks.md](./webhooks.md) |

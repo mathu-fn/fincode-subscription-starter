@@ -10,6 +10,7 @@ from app.api.deps import (
 from app.core.rate_limit import limiter
 from app.schemas.subscription import (
     BillingHistoryItem,
+    ChangeSubscriptionPlanRequest,
     CreateSubscriptionRequest,
     PaginatedBillingHistory,
     PlanOut,
@@ -46,6 +47,30 @@ async def create_subscription(
     ] = None,
 ) -> SubscriptionOut:
     sub = await manager.subscribe(
+        db,
+        user,
+        plan_id=payload.fincode_plan_id,
+        card_id=payload.card_id,
+        idempotency_key=idempotency_key,
+    )
+    await db.commit()
+    await db.refresh(sub)
+    return SubscriptionOut.model_validate(sub)
+
+
+@router.patch("", response_model=SubscriptionOut)
+@limiter.limit("5/minute")
+async def change_subscription_plan(
+    request: Request,
+    payload: ChangeSubscriptionPlanRequest,
+    db: SessionDep,
+    user: CurrentUserDep,
+    manager: SubscriptionManagerDep,
+    idempotency_key: Annotated[
+        str | None, Header(alias="Idempotency-Key", max_length=64)
+    ] = None,
+) -> SubscriptionOut:
+    sub = await manager.change_plan(
         db,
         user,
         plan_id=payload.fincode_plan_id,

@@ -9,10 +9,12 @@ from typing import Any
 
 import pytest_asyncio
 from httpx import AsyncClient
+from sqlalchemy import func, select
 
 from app.api.deps import get_fincode_client
 from app.core.config import Settings
 from app.core.lifespan import create_fincode_client
+from app.models.subscription import Subscription
 from app.services.fincode.client import FincodeHttpClient
 from app.services.fincode.mock_client import FincodeMockClient
 
@@ -70,6 +72,19 @@ async def test_mock_client_creates_subscription_with_mock_id() -> None:
     assert raw["current_period_end"]
 
 
+async def test_mock_client_updates_subscription_plan() -> None:
+    client = FincodeMockClient()
+    raw = await client.request(
+        "PUT",
+        "/v1/subscriptions/sub_mock_123",
+        json={"pay_type": "Card", "plan_id": "plan_mock_pro"},
+        idempotency_key="n2",
+    )
+    assert raw["id"] == "sub_mock_123"
+    assert raw["status"] == "active"
+    assert raw["plan_id"] == "plan_mock_pro"
+
+
 @pytest_asyncio.fixture()
 async def mock_fincode(app_instance) -> FincodeMockClient:
     mock = FincodeMockClient()
@@ -101,3 +116,59 @@ async def test_full_card_then_paid_subscription_flow_in_mock_mode(
     assert sub["status"] == "active"
     assert sub["plan_amount"] == 500
     assert sub["fincode_subscription_id"].startswith("sub_mock_")
+
+
+async def test_paid_subscription_plan_change_updates_same_active_row(
+    auth_client: AsyncClient, mock_fincode: FincodeMockClient, db_session
+) -> None:
+    card_resp = await auth_client.post("/api/subscription/cards", json={"token": "tok_mock_visa"})
+    assert card_resp.status_code == 201, card_resp.text
+    card: dict[str, Any] = card_resp.json()
+
+    create_resp = await auth_client.post(
+        "/api/subscription",
+        json={"fincode_plan_id": "plan_mock_basic", "card_id": card["id"]},
+    )
+    assert create_resp.status_code == 201, create_resp.text
+    created = create_resp.json()
+
+    change_resp = await auth_client.patch(
+        "/api/subscription",
+        json={"fincode_plan_id": "plan_mock_pro"},
+        headers={"Idempotency-Key": "change-plan-1"},
+    )
+    assert change_resp.status_code == 200, change_resp.text
+    changed = change_resp.json()
+    assert changed["id"] == created["id"]
+    assert changed["fincode_subscription_id"] == created["fincode_subscription_id"]
+    assert changed["fincode_plan_id"] == "plan_mock_pro"
+    assert changed["plan_amount"] == 1500
+
+    total = await db_session.scalar(select(func.count()).select_from(Subscription))
+    assert total == 1
+
+
+async def test_free_subscription_can_change_to_paid_plan_same_active_row(
+    auth_client: AsyncClient, mock_fincode: FincodeMockClient, db_session
+) -> None:
+    free_resp = await auth_client.post("/api/subscription", json={"fincode_plan_id": "free"})
+    assert free_resp.status_code == 201, free_resp.text
+    free_sub = free_resp.json()
+
+    card_resp = await auth_client.post("/api/subscription/cards", json={"token": "tok_mock_visa"})
+    assert card_resp.status_code == 201, card_resp.text
+    card: dict[str, Any] = card_resp.json()
+
+    change_resp = await auth_client.patch(
+        "/api/subscription",
+        json={"fincode_plan_id": "plan_mock_basic", "card_id": card["id"]},
+    )
+    assert change_resp.status_code == 200, change_resp.text
+    changed = change_resp.json()
+    assert changed["id"] == free_sub["id"]
+    assert changed["fincode_subscription_id"].startswith("sub_mock_")
+    assert changed["fincode_plan_id"] == "plan_mock_basic"
+    assert changed["plan_amount"] == 500
+
+    total = await db_session.scalar(select(func.count()).select_from(Subscription))
+    assert total == 1
