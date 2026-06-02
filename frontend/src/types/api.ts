@@ -8,6 +8,7 @@ export type Subscription = {
   plan_interval: string;
   cancelled_at: string | null;
   current_period_end: string | null;
+  cancel_at_period_end: boolean;
   created_at: string;
 } | null;
 
