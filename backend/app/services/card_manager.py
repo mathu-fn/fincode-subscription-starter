@@ -13,7 +13,6 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import SubscriptionStatus
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.fincode_card import FincodeCard
 from app.models.fincode_customer import FincodeCustomer
@@ -23,6 +22,7 @@ from app.services.audit_logger import AuditLogger
 from app.services.base_manager import BaseManager
 from app.services.fincode.card_service import FincodeCardService
 from app.services.fincode.client import FincodeClient
+from app.services.subscription_periods import usable_subscription_conditions
 
 
 def _parse_expire(expire: str | None) -> tuple[int, int]:
@@ -102,7 +102,7 @@ class CardManager(BaseManager):
         active = await db.execute(
             select(Subscription).where(
                 Subscription.fincode_card_id == card.id,
-                Subscription.status == SubscriptionStatus.ACTIVE,
+                *usable_subscription_conditions(datetime.now(UTC)),
             )
         )
         if active.scalars().first() is not None:

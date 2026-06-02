@@ -7,10 +7,16 @@ fincode は CLAUDE.md の方針どおり直接叩かず、``get_fincode_client``
 
 from __future__ import annotations
 
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, cast
 
 import pytest_asyncio
 from httpx import AsyncClient
+from sqlalchemy import select
+
+from app.models.subscription import Subscription
+
+CURRENT_PERIOD_END = "2099-01-01T00:00:00+00:00"
 
 
 class FakeFincodeClient:
@@ -37,6 +43,24 @@ class FakeFincodeClient:
                 "amount": "500",
                 "interval_pattern": "month",
             }
+        if method == "POST" and path == "/v1/customers":
+            return {"id": json["id"] if json else "local_user_1"}
+        if method == "POST" and path.endswith("/cards"):
+            return {
+                "id": "card_test_1",
+                "brand": "VISA",
+                "card_no": "************4242",
+                "expire": "3012",
+                "default_flag": "1",
+            }
+        if method == "POST" and path == "/v1/subscriptions":
+            return {
+                "id": "sub_test_1",
+                "status": "ACTIVE",
+                "current_period_end": CURRENT_PERIOD_END,
+            }
+        if method == "DELETE" and path == "/v1/subscriptions/sub_test_1":
+            return {"id": "sub_test_1", "status": "CANCELED"}
         raise AssertionError(f"unexpected fincode call: {method} {path}")
 
 
@@ -95,6 +119,7 @@ async def test_cancel_free_plan_is_local_only(
     cancel = await auth_client.delete("/api/subscription")
     assert cancel.status_code == 200, cancel.text
     assert cancel.json()["status"] == "cancelled"
+    assert cancel.json()["cancel_at_period_end"] is False
     # 契約・解約のどちらでも fincode は呼ばれていない。
     assert fake_fincode.calls == []
 
@@ -108,3 +133,67 @@ async def test_free_plan_occupies_single_active_slot(
     second = await auth_client.post("/api/subscription", json={"fincode_plan_id": "free"})
     assert second.status_code == 409, second.text
     assert second.json()["detail"]["code"] == "active_subscription_exists"
+
+
+async def _create_paid_subscription(auth_client: AsyncClient) -> dict[str, Any]:
+    card = await auth_client.post("/api/subscription/cards", json={"token": "tok_test_paid"})
+    assert card.status_code == 201, card.text
+
+    create = await auth_client.post(
+        "/api/subscription",
+        json={"fincode_plan_id": "plan_test_pro", "card_id": card.json()["id"]},
+    )
+    assert create.status_code == 201, create.text
+    return cast(dict[str, Any], create.json())
+
+
+async def test_cancel_paid_plan_keeps_access_until_current_period_end(
+    auth_client: AsyncClient, fake_fincode: FakeFincodeClient
+) -> None:
+    created = await _create_paid_subscription(auth_client)
+    assert created["status"] == "active"
+    assert created["current_period_end"].startswith("2099-01-01T00:00:00")
+
+    cancel = await auth_client.delete("/api/subscription")
+    assert cancel.status_code == 200, cancel.text
+    body = cancel.json()
+    assert body["status"] == "active"
+    assert body["cancel_at_period_end"] is True
+    assert body["cancelled_at"] is not None
+    assert body["current_period_end"].startswith("2099-01-01T00:00:00")
+
+    current = await auth_client.get("/api/subscription")
+    assert current.status_code == 200, current.text
+    assert current.json()["cancel_at_period_end"] is True
+
+    change = await auth_client.patch(
+        "/api/subscription", json={"fincode_plan_id": "plan_test_basic"}
+    )
+    assert change.status_code == 409, change.text
+    assert change.json()["detail"]["code"] == "subscription_cancel_scheduled"
+    assert ("DELETE", "/v1/subscriptions/sub_test_1") in fake_fincode.calls
+
+
+async def test_elapsed_cancel_scheduled_subscription_does_not_block_new_subscription(
+    auth_client: AsyncClient,
+    db_session,
+    fake_fincode: FakeFincodeClient,
+) -> None:
+    await _create_paid_subscription(auth_client)
+    cancel = await auth_client.delete("/api/subscription")
+    assert cancel.status_code == 200, cancel.text
+
+    sub = await db_session.scalar(
+        select(Subscription).where(Subscription.fincode_subscription_id == "sub_test_1")
+    )
+    assert sub is not None
+    sub.current_period_end = datetime(2000, 1, 1, tzinfo=UTC)
+    await db_session.commit()
+
+    create = await auth_client.post("/api/subscription", json={"fincode_plan_id": "free"})
+    assert create.status_code == 201, create.text
+    body = create.json()
+    assert body["fincode_plan_id"] == "free"
+    assert body["status"] == "active"
+    assert body["cancel_at_period_end"] is False
+    assert ("DELETE", "/v1/subscriptions/sub_test_1") in fake_fincode.calls

@@ -25,7 +25,7 @@ const features: Array<{ title: string; description: string }> = [
   {
     title: "解約フロー",
     description:
-      "fincode に即時解約要求 → ローカル status を cancelled に更新。期間末までのアクセス可否は業務側で判断します。"
+      "fincode 側の請求を停止し、有料契約は current_period_end まで active として扱います。期間切れ後はローカル status を cancelled に確定します。"
   },
   {
     title: "Webhook 受信と冪等性",

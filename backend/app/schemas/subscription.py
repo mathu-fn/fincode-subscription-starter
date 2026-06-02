@@ -27,6 +27,7 @@ class SubscriptionOut(BaseModel):
     plan_interval: str
     current_period_end: datetime | None = None
     cancelled_at: datetime | None = None
+    cancel_at_period_end: bool
     created_at: datetime
 
 

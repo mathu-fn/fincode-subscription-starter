@@ -29,6 +29,11 @@ from app.models.subscription import Subscription
 from app.models.subscription_result import SubscriptionResult
 from app.models.webhook_event_seen import WebhookEventSeen
 from app.services.audit_logger import AuditLogger
+from app.services.subscription_periods import (
+    apply_current_period_end,
+    cancel_at_period_end,
+    has_future_period,
+)
 
 logger = get_logger(__name__)
 
@@ -164,14 +169,25 @@ class FincodeWebhookHandler:
         )
         if sub is None:
             return
-        if sub.status != SubscriptionStatus.CANCELLED:
+        # 解約 Webhook は支払い済み期限を縮めてはならない（only_extend）。
+        apply_current_period_end(sub, data, only_extend=True)
+        now = datetime.now(UTC)
+        if has_future_period(sub, now):
+            sub.status = SubscriptionStatus.ACTIVE
+            if sub.cancelled_at is None:
+                sub.cancelled_at = now
+        elif sub.status != SubscriptionStatus.CANCELLED:
             sub.status = SubscriptionStatus.CANCELLED
-            sub.cancelled_at = datetime.now(UTC)
+            if sub.cancelled_at is None:
+                sub.cancelled_at = now
         await self._audit.record(
             db,
             user_id=sub.user_id,
             event="webhook.subscription_cancelled",
             auditable_type="subscription",
             auditable_id=sub.id,
-            after={"status": SubscriptionStatus.CANCELLED},
+            after={
+                "status": sub.status,
+                "cancel_at_period_end": cancel_at_period_end(sub),
+            },
         )

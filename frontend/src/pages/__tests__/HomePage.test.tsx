@@ -116,6 +116,7 @@ describe("HomePage cards section", () => {
           plan_interval: "month",
           cancelled_at: null,
           current_period_end: null,
+          cancel_at_period_end: false,
           created_at: "2026-01-01T00:00:00Z"
         });
       }
@@ -154,6 +155,62 @@ describe("HomePage cards section", () => {
 
     // 未知のステータスは生の文字列のままフォールバック表示する（値を落とさない）。
     expect(screen.getByText("authorized")).toBeInTheDocument();
+  });
+
+  it("shows cancel-at-period-end state and blocks further cancellation or plan changes", async () => {
+    mocks.apiFetch.mockImplementation((path: string) => {
+      if (path === "/api/subscription") {
+        return Promise.resolve({
+          id: 1,
+          status: "active",
+          fincode_subscription_id: "sub_mock_1",
+          fincode_plan_id: "plan_mock_basic",
+          plan_name: "ベーシック",
+          plan_amount: 500,
+          plan_interval: "month",
+          cancelled_at: "2026-01-15T00:00:00Z",
+          current_period_end: "2026-02-01T00:00:00Z",
+          cancel_at_period_end: true,
+          created_at: "2026-01-01T00:00:00Z"
+        });
+      }
+      if (path === "/api/subscription/plans") {
+        return Promise.resolve([
+          {
+            fincode_plan_id: "plan_mock_basic",
+            name: "ベーシック",
+            amount: 500,
+            currency: "JPY",
+            interval: "month"
+          },
+          {
+            fincode_plan_id: "plan_mock_pro",
+            name: "プロ",
+            amount: 1500,
+            currency: "JPY",
+            interval: "month"
+          }
+        ]);
+      }
+      if (path === "/api/subscription/cards") return Promise.resolve([]);
+      if (path.startsWith("/api/subscription/history")) {
+        return Promise.resolve({ data: [], page: 1, per_page: 10, total: 0 });
+      }
+      return Promise.resolve(null);
+    });
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText("解約予約中").length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText("利用可能期限")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "解約する" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "解約予約中" })).toBeDisabled();
   });
 
   it("confirms card deletion via the ConfirmDialog instead of window.confirm", async () => {
@@ -217,6 +274,7 @@ describe("HomePage cards section", () => {
           plan_interval: "month",
           cancelled_at: null,
           current_period_end: null,
+          cancel_at_period_end: false,
           created_at: "2026-01-01T00:00:00Z"
         });
       }
@@ -231,6 +289,7 @@ describe("HomePage cards section", () => {
           plan_interval: "month",
           cancelled_at: null,
           current_period_end: null,
+          cancel_at_period_end: false,
           created_at: "2026-01-01T00:00:00Z"
         });
       }

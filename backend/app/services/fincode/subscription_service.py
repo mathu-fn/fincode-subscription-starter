@@ -32,9 +32,14 @@ class FincodeSubscriptionService(BaseFincodeService):
         )
 
     async def cancel(self, *, fincode_subscription_id: str) -> dict[str, Any]:
+        # fincode の解約は ``DELETE /v1/subscriptions/{id}``。将来の課金を停止し、
+        # サブスクの ``status`` を ``CANCELED`` にする（ネイティブな期間末解約も
+        # 日割りも無い）。支払い済み期限は登録時の ``next_charge_date`` 由来で確定済みなので、
+        # 「期間末まで利用可」はアプリ側ポリシー。解約レスポンスでこの期限を縮めない
+        # （``subscription_periods.apply_current_period_end(..., only_extend=True)``）。
         return await self._client.request(
-            "PUT",
-            f"/v1/subscriptions/{fincode_subscription_id}/cancel",
+            "DELETE",
+            f"/v1/subscriptions/{fincode_subscription_id}",
         )
 
     async def update_plan(

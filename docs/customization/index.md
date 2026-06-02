@@ -31,6 +31,8 @@
 
 フリープランはアプリ側の合成プランなので、free から有料プランへ変更する場合だけ `card_id` が必要です。有料プランから free へ変更する場合は fincode 側のサブスクリプションを停止し、ローカル行を free に更新します。
 
+解約予約中（`cancel_at_period_end=true`）の契約は、支払い済み期間の利用権を守るため `current_period_end` まで `active` のまま保持します。この状態ではプラン変更を受け付けません。
+
 このスターターは日割り（proration）を計算しません。即時差額請求、次回請求日からの適用、クレジット残高などを扱う場合は、`app/services/subscription_manager.py` の `change_plan` と `subscription_results` / 監査ログの記録方針を拡張してください。
 
 ## 拡張しやすい箇所

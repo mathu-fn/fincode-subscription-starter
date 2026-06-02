@@ -23,6 +23,18 @@ function formatPlanPrice(amount: number, interval: string): string {
   if (amount === 0) return "無料";
   return `¥${amount.toLocaleString()} / ${interval}`;
 }
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString("ja-JP");
+}
+
+function cancelDialogDescription(sub: NonNullable<Subscription>): string {
+  if (sub.fincode_subscription_id && sub.current_period_end) {
+    return `現在の契約は ${formatDateTime(sub.current_period_end)} まで利用できます。次回以降の請求は発生しません。`;
+  }
+  return "現在の契約はただちに解約されます。解約後は利用できません。";
+}
+
 const cardClass = "border border-sky-200 bg-white p-4 shadow-sm shadow-sky-100";
 
 export function HomePage() {
@@ -303,6 +315,7 @@ export function HomePage() {
                   <>
                     <StatusBadge status={sub.status} />
                     <span>{formatPlanPrice(sub.plan_amount, sub.plan_interval)}</span>
+                    {sub.cancel_at_period_end && <span>解約予約中</span>}
                   </>
                 ) : (
                   "プランを選択して契約できます"
@@ -379,20 +392,36 @@ export function HomePage() {
                 <dt className="text-sm text-slate-500">状態</dt>
                 <dd className="mt-1">
                   <StatusBadge status={sub.status} />
+                  {sub.cancel_at_period_end && (
+                    <span className="ml-2 text-sm font-semibold text-amber-700">解約予約中</span>
+                  )}
                 </dd>
               </div>
               <div className="bg-sky-50 p-4">
                 <dt className="text-sm text-slate-500">契約日</dt>
-                <dd className="mt-1 font-semibold text-slate-900">{new Date(sub.created_at).toLocaleString("ja-JP")}</dd>
+                <dd className="mt-1 font-semibold text-slate-900">{formatDateTime(sub.created_at)}</dd>
               </div>
               {sub.cancelled_at && (
                 <div className="bg-sky-50 p-4">
-                  <dt className="text-sm text-slate-500">解約日</dt>
-                  <dd className="mt-1 font-semibold text-slate-900">{new Date(sub.cancelled_at).toLocaleString("ja-JP")}</dd>
+                  <dt className="text-sm text-slate-500">{sub.cancel_at_period_end ? "解約申込日" : "解約日"}</dt>
+                  <dd className="mt-1 font-semibold text-slate-900">{formatDateTime(sub.cancelled_at)}</dd>
+                </div>
+              )}
+              {sub.current_period_end && (
+                <div className="bg-sky-50 p-4">
+                  <dt className="text-sm text-slate-500">
+                    {sub.cancel_at_period_end ? "利用可能期限" : "現在の請求期間終了"}
+                  </dt>
+                  <dd className="mt-1 font-semibold text-slate-900">{formatDateTime(sub.current_period_end)}</dd>
                 </div>
               )}
             </dl>
-            {sub.status === "active" && (
+            {sub.cancel_at_period_end && sub.current_period_end && (
+              <p className="mt-6 text-sm font-semibold text-amber-700">
+                この契約は {formatDateTime(sub.current_period_end)} まで利用できます。
+              </p>
+            )}
+            {sub.status === "active" && !sub.cancel_at_period_end && (
               <p className="mt-6">
                 <LoadingButton type="button" variant="danger" isLoading={cancelling} loadingLabel="解約中..." onClick={() => setShowCancelConfirm(true)}>
                   解約する
@@ -440,13 +469,16 @@ export function HomePage() {
               {plans.map((plan) => {
                 const activeSub = sub?.status === "active" ? sub : null;
                 const isCurrentPlan = activeSub?.fincode_plan_id === plan.fincode_plan_id;
+                const planChangeBlocked = activeSub?.cancel_at_period_end ?? false;
                 const isFreeToPaid =
                   activeSub?.fincode_plan_id === FREE_PLAN_ID && plan.fincode_plan_id !== FREE_PLAN_ID;
                 const needsCard = plan.amount > 0 && (!activeSub || isFreeToPaid);
                 const cardMissing = needsCard && cards.length === 0;
                 const buttonLabel = isCurrentPlan
                   ? "現在のプラン"
-                  : activeSub
+                  : planChangeBlocked
+                    ? "解約予約中"
+                    : activeSub
                     ? "このプランに変更"
                     : "このプランを契約";
                 return (
@@ -463,10 +495,16 @@ export function HomePage() {
                     </p>
                     <LoadingButton
                       type="button"
-                      disabled={isCurrentPlan || cardMissing || submittingPlan !== null}
+                      disabled={isCurrentPlan || planChangeBlocked || cardMissing || submittingPlan !== null}
                       isLoading={submittingPlan === plan.fincode_plan_id}
                       loadingLabel={activeSub ? "変更中..." : "登録中..."}
-                      title={cardMissing ? "先にカードを登録してください" : undefined}
+                      title={
+                        planChangeBlocked
+                          ? "解約予約中はプラン変更できません"
+                          : cardMissing
+                            ? "先にカードを登録してください"
+                            : undefined
+                      }
                       onClick={() =>
                         activeSub ? changePlan(plan.fincode_plan_id) : subscribe(plan.fincode_plan_id)
                       }
@@ -677,7 +715,7 @@ export function HomePage() {
       <ConfirmDialog
         open={showCancelConfirm}
         title="本当に解約しますか？"
-        description="現在の契約を解約します。次回以降の請求は発生しません。"
+        description={sub ? cancelDialogDescription(sub) : undefined}
         confirmLabel="解約する"
         loadingLabel="解約中..."
         variant="danger"
