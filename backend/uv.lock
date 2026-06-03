@@ -8,15 +8,6 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "aiosqlite"
-version = "0.22.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/4e/8a/64761f4005f17809769d23e518d915db74e6310474e733e3593cfc854ef1/aiosqlite-0.22.1.tar.gz", hash = "sha256:043e0bd78d32888c0a9ca90fc788b38796843360c855a7262a532813133a0650", size = 14821, upload-time = "2025-12-23T19:25:43.997Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/00/b7/e3bf5133d697a08128598c8d0abc5e16377b51465a33756de24fa7dee953/aiosqlite-0.22.1-py3-none-any.whl", hash = "sha256:21c002eb13823fad740196c5a2e9d8e62f6243bd9e7e4a1f87fb5e44ecb4fceb", size = 17405, upload-time = "2025-12-23T19:25:42.139Z" },
-]
-
-[[package]]
 name = "alembic"
 version = "1.18.4"
 source = { registry = "https://pypi.org/simple" }
@@ -546,18 +537,6 @@ wheels = [
 ]
 
 [[package]]
-name = "faker"
-version = "40.19.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "tzdata", marker = "sys_platform == 'win32'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/15/01/28c8ddae8caaf82c929655000963d83e3f01265a9af34e823c2ef2eee8ac/faker-40.19.1.tar.gz", hash = "sha256:76fa71fd3bf320db25e5504eb356f9a76b8a95cd6098524d006f446035b6b89d", size = 1969318, upload-time = "2026-05-22T15:57:37.433Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/b4/40a1ec12ec834604f3848143343baf1c67bc9a1096e401907eaa0d25876a/faker-40.19.1-py3-none-any.whl", hash = "sha256:265259b37c013838baaae34940207288170df385d6c5281413fce56a3504d580", size = 2007643, upload-time = "2026-05-22T15:57:35.867Z" },
-]
-
-[[package]]
 name = "fastapi"
 version = "0.116.2"
 source = { registry = "https://pypi.org/simple" }
@@ -596,7 +575,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt", extra = ["crypto"] },
-    { name = "python-multipart" },
     { name = "slowapi" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "structlog" },
@@ -605,11 +583,8 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "aiosqlite" },
-    { name = "freezegun" },
     { name = "httpx" },
     { name = "mypy" },
-    { name = "polyfactory" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -631,7 +606,6 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7.0,<3.0.0" },
     { name = "pydantic-settings", specifier = ">=2.3.0,<3.0.0" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.9.0,<3.0.0" },
-    { name = "python-multipart", specifier = ">=0.0.9,<0.1.0" },
     { name = "slowapi", specifier = ">=0.1.9,<0.2.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.30,<2.1.0" },
     { name = "structlog", specifier = ">=24.1.0,<25.0.0" },
@@ -640,29 +614,14 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "aiosqlite", specifier = ">=0.20.0,<1.0.0" },
-    { name = "freezegun", specifier = ">=1.5.0,<2.0.0" },
     { name = "httpx", specifier = ">=0.28.1,<0.29.0" },
     { name = "mypy", specifier = ">=1.13.0,<2.0.0" },
-    { name = "polyfactory", specifier = ">=2.18.0,<3.0.0" },
     { name = "pre-commit", specifier = ">=4.0.0,<5.0.0" },
     { name = "pytest", specifier = ">=8.4.1,<9.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.23.7,<2.0.0" },
     { name = "pytest-cov", specifier = ">=5.0.0,<6.0.0" },
     { name = "ruff", specifier = ">=0.8.0,<1.0.0" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.7.0,<5.0.0" },
-]
-
-[[package]]
-name = "freezegun"
-version = "1.5.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "python-dateutil" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/95/dd/23e2f4e357f8fd3bdff613c1fe4466d21bfb00a6177f238079b17f7b1c84/freezegun-1.5.5.tar.gz", hash = "sha256:ac7742a6cc6c25a2c35e9292dfd554b897b517d2dec26891a2e8debf205cb94a", size = 35914, upload-time = "2025-08-09T10:39:08.338Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/5e/2e/b41d8a1a917d6581fc27a35d05561037b048e47df50f27f8ac9c7e27a710/freezegun-1.5.5-py3-none-any.whl", hash = "sha256:cd557f4a75cf074e84bc374249b9dd491eaeacd61376b9eb3c423282211619d2", size = 19266, upload-time = "2025-08-09T10:39:06.636Z" },
 ]
 
 [[package]]
@@ -1120,19 +1079,6 @@ wheels = [
 ]
 
 [[package]]
-name = "polyfactory"
-version = "2.22.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "faker" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/15/c6/517137955bb3764e813edfa0086e8b3675dc126c49428e8482a70018ec33/polyfactory-2.22.5.tar.gz", hash = "sha256:d641d8c10c7d3e1f0f862ba2733ad1523069af58614bb1c077aeccabb66d26b7", size = 264946, upload-time = "2025-11-15T09:52:39.863Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/11/87/6cd69c43e86bc5863f93dba3c9fb42ee4fda36a0fe5aa3cbd25001fb26f8/polyfactory-2.22.5-py3-none-any.whl", hash = "sha256:822d1af463520153200b4b62b06b0dc73a1d5edc8911e2e63ed0757ae21cc2b3", size = 63934, upload-time = "2025-11-15T09:52:37.956Z" },
-]
-
-[[package]]
 name = "pre-commit"
 version = "4.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1458,18 +1404,6 @@ wheels = [
 ]
 
 [[package]]
-name = "python-dateutil"
-version = "2.9.0.post0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "six" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/66/c0/0c8b6ad9f17a802ee498c46e004a0eb49bc148f2fd230864601a86dcf6db/python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3", size = 342432, upload-time = "2024-03-01T18:36:20.211Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", size = 229892, upload-time = "2024-03-01T18:36:18.57Z" },
-]
-
-[[package]]
 name = "python-discovery"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1489,15 +1423,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/82/ed/0301aeeac3e5353ef3d94b6ec08bbcabd04a72018415dcb29e588514bba8/python_dotenv-1.2.2.tar.gz", hash = "sha256:2c371a91fbd7ba082c2c1dc1f8bf89ca22564a087c2c287cd9b662adde799cf3", size = 50135, upload-time = "2026-03-01T16:00:26.196Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0b/d7/1959b9648791274998a9c3526f6d0ec8fd2233e4d4acce81bbae76b44b2a/python_dotenv-1.2.2-py3-none-any.whl", hash = "sha256:1d8214789a24de455a8b8bd8ae6fe3c6b69a5e3d64aa8a8e5d68e694bbcb285a", size = 22101, upload-time = "2026-03-01T16:00:25.09Z" },
-]
-
-[[package]]
-name = "python-multipart"
-version = "0.0.29"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/4e/fe/70bd71a6738b09a0bdf6480ca6436b167469ca4578b2a0efbe390b4b0e70/python_multipart-0.0.29.tar.gz", hash = "sha256:643e93849196645e2dbdd81a0f8829a23123ad7f797a84a364c6fb3563f18904", size = 45678, upload-time = "2026-05-17T17:29:47.654Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/8f/cb/769cfc37177252872a45a71f3fbdde9d51b471a3f3c14bfe95dde3407386/python_multipart-0.0.29-py3-none-any.whl", hash = "sha256:2ddcc971cef266225f54f552d8fa10bcfbb1f14446caec199060daac59ff2d69", size = 29640, upload-time = "2026-05-17T17:29:45.69Z" },
 ]
 
 [[package]]
@@ -1612,15 +1537,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/36/38/012bf76752e1f89ed50b77b99532d90f3a3e287bc7918e1fc0948ac866ac/ruff-0.15.14-py3-none-win32.whl", hash = "sha256:6d0c1ad2a0ab718d39b6d8fd2217981ce4d625cd96a720095f798fb47d8b13e6", size = 10805548, upload-time = "2026-05-21T14:34:33.453Z" },
     { url = "https://files.pythonhosted.org/packages/d1/b7/4ea2c170f10ad760fff2a5250beb18897719dc8b52b53a24cddbb9dd3f19/ruff-0.15.14-py3-none-win_amd64.whl", hash = "sha256:802342981e056db3851a7836e5b070f8f15f67d4a685ae2a6160939d364b2902", size = 11939523, upload-time = "2026-05-21T14:34:18.077Z" },
     { url = "https://files.pythonhosted.org/packages/62/d5/bc97ff895ec35cf3925d4bd60f3b39d822f377a446906ec9bcc87405e59b/ruff-0.15.14-py3-none-win_arm64.whl", hash = "sha256:ff47b90a9ef6a40c9e2f3b479c1fb78531adf055b94c1eba0a7ba04b31951826", size = 11208607, upload-time = "2026-05-21T14:34:26.525Z" },
-]
-
-[[package]]
-name = "six"
-version = "1.17.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
 ]
 
 [[package]]
