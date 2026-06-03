@@ -64,13 +64,6 @@ class FakeFincodeClient:
                 "status": "ACTIVE",
                 "current_period_end": CURRENT_PERIOD_END,
             }
-        if method == "PUT" and path == "/v1/subscriptions/sub_test_1":
-            return {
-                "id": "sub_test_1",
-                "status": "ACTIVE",
-                "current_period_end": CURRENT_PERIOD_END,
-                "plan_id": json.get("plan_id") if json else None,
-            }
         if method == "DELETE" and path == "/v1/subscriptions/sub_test_1":
             return {"id": "sub_test_1", "status": "CANCELED"}
         raise AssertionError(f"unexpected fincode call: {method} {path}")
@@ -231,11 +224,14 @@ async def test_cancel_paid_plan_sends_pay_type_query(
     assert req["json"] is None
 
 
-async def test_change_paid_to_paid_plan_updates_via_put(
+async def test_change_paid_to_paid_plan_recreates_subscription(
     auth_client: AsyncClient, fake_fincode: FakeFincodeClient
 ) -> None:
-    # 有料→有料は fincode の ``PUT /v1/subscriptions/{id}`` をボディ pay_type+plan_id で叩く。
+    # fincode は課金開始済みサブスクのプラン変更（PUT）を拒否する（ESC03194031）。
+    # そのため有料→有料は「現行サブスクを解約（DELETE, pay_type クエリ付き）→新プランで
+    # 再作成（POST）」で行い、同じローカル行を更新する。PUT は呼ばない。
     await _create_paid_subscription(auth_client)
+    fake_fincode.requests.clear()
 
     change = await auth_client.patch(
         "/api/subscription", json={"fincode_plan_id": "plan_test_basic"}
@@ -243,9 +239,14 @@ async def test_change_paid_to_paid_plan_updates_via_put(
     assert change.status_code == 200, change.text
     assert change.json()["fincode_plan_id"] == "plan_test_basic"
 
-    req = _find_request(fake_fincode, "PUT", "/v1/subscriptions/sub_test_1")
-    assert req["json"] == {"pay_type": "Card", "plan_id": "plan_test_basic"}
-    assert req["params"] is None
+    # 旧サブスクの解約はクエリ pay_type=Card 付き。
+    cancel = _find_request(fake_fincode, "DELETE", "/v1/subscriptions/sub_test_1")
+    assert cancel["params"] == {"pay_type": "Card"}
+    # 新プランで再作成（POST）。新サブスクのボディに新プランIDが入る。
+    create = _find_request(fake_fincode, "POST", "/v1/subscriptions")
+    assert create["json"]["plan_id"] == "plan_test_basic"
+    # プラン変更で PUT は一切呼ばない。
+    assert not any(r["method"] == "PUT" for r in fake_fincode.requests)
 
 
 async def test_change_paid_to_free_plan_cancels_with_pay_type_query(
