@@ -62,6 +62,7 @@ class FincodeClient(Protocol):
         path: str,
         *,
         json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]: ...
 
@@ -103,6 +104,7 @@ class FincodeHttpClient:
         path: str,
         *,
         json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         headers: dict[str, str] = {}
@@ -115,7 +117,9 @@ class FincodeHttpClient:
             self._breaker.before_call()
 
             try:
-                response = await self._client.request(method, path, json=json, headers=headers)
+                response = await self._client.request(
+                    method, path, json=json, params=params, headers=headers
+                )
             except httpx.TimeoutException as e:
                 self._breaker.record_failure()
                 last_exc = FincodeTimeoutError(str(e))

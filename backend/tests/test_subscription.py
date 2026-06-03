@@ -24,6 +24,9 @@ class FakeFincodeClient:
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
+        # クエリ/ボディまで検証したい新テスト向けに、リクエスト全体も並行記録する
+        # （既存の ``calls`` 2タプル assert は壊さない）。
+        self.requests: list[dict[str, Any]] = []
 
     async def request(
         self,
@@ -31,9 +34,11 @@ class FakeFincodeClient:
         path: str,
         *,
         json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         self.calls.append((method, path))
+        self.requests.append({"method": method, "path": path, "params": params, "json": json})
         if method == "GET" and path == "/v1/plans":
             return {"list": []}
         if method == "GET" and path.startswith("/v1/plans/"):
@@ -58,6 +63,13 @@ class FakeFincodeClient:
                 "id": "sub_test_1",
                 "status": "ACTIVE",
                 "current_period_end": CURRENT_PERIOD_END,
+            }
+        if method == "PUT" and path == "/v1/subscriptions/sub_test_1":
+            return {
+                "id": "sub_test_1",
+                "status": "ACTIVE",
+                "current_period_end": CURRENT_PERIOD_END,
+                "plan_id": json.get("plan_id") if json else None,
             }
         if method == "DELETE" and path == "/v1/subscriptions/sub_test_1":
             return {"id": "sub_test_1", "status": "CANCELED"}
@@ -197,3 +209,58 @@ async def test_elapsed_cancel_scheduled_subscription_does_not_block_new_subscrip
     assert body["status"] == "active"
     assert body["cancel_at_period_end"] is False
     assert ("DELETE", "/v1/subscriptions/sub_test_1") in fake_fincode.calls
+
+
+def _find_request(fake: FakeFincodeClient, method: str, path: str) -> dict[str, Any]:
+    matches = [r for r in fake.requests if r["method"] == method and r["path"] == path]
+    assert matches, f"no recorded {method} {path}; got {fake.requests}"
+    return matches[-1]
+
+
+async def test_cancel_paid_plan_sends_pay_type_query(
+    auth_client: AsyncClient, fake_fincode: FakeFincodeClient
+) -> None:
+    # fincode の解約は ``DELETE /v1/subscriptions/{id}?pay_type=Card``。クエリが無いと 400。
+    await _create_paid_subscription(auth_client)
+
+    cancel = await auth_client.delete("/api/subscription")
+    assert cancel.status_code == 200, cancel.text
+
+    req = _find_request(fake_fincode, "DELETE", "/v1/subscriptions/sub_test_1")
+    assert req["params"] == {"pay_type": "Card"}
+    assert req["json"] is None
+
+
+async def test_change_paid_to_paid_plan_updates_via_put(
+    auth_client: AsyncClient, fake_fincode: FakeFincodeClient
+) -> None:
+    # 有料→有料は fincode の ``PUT /v1/subscriptions/{id}`` をボディ pay_type+plan_id で叩く。
+    await _create_paid_subscription(auth_client)
+
+    change = await auth_client.patch(
+        "/api/subscription", json={"fincode_plan_id": "plan_test_basic"}
+    )
+    assert change.status_code == 200, change.text
+    assert change.json()["fincode_plan_id"] == "plan_test_basic"
+
+    req = _find_request(fake_fincode, "PUT", "/v1/subscriptions/sub_test_1")
+    assert req["json"] == {"pay_type": "Card", "plan_id": "plan_test_basic"}
+    assert req["params"] is None
+
+
+async def test_change_paid_to_free_plan_cancels_with_pay_type_query(
+    auth_client: AsyncClient, fake_fincode: FakeFincodeClient
+) -> None:
+    # 有料→フリーは fincode サブスクを解約（DELETE, pay_type クエリ付き）し、ローカル行を
+    # フリースナップショットへ更新して fincode_subscription_id を外す。
+    await _create_paid_subscription(auth_client)
+
+    change = await auth_client.patch("/api/subscription", json={"fincode_plan_id": "free"})
+    assert change.status_code == 200, change.text
+    body = change.json()
+    assert body["fincode_plan_id"] == "free"
+    assert body["status"] == "active"
+    assert body["fincode_subscription_id"] is None
+
+    req = _find_request(fake_fincode, "DELETE", "/v1/subscriptions/sub_test_1")
+    assert req["params"] == {"pay_type": "Card"}
