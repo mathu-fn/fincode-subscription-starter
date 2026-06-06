@@ -37,25 +37,10 @@ class FincodeSubscriptionService(BaseFincodeService):
         # 日割りも無い）。支払い済み期限は登録時の ``next_charge_date`` 由来で確定済みなので、
         # 「期間末まで利用可」はアプリ側ポリシー。解約レスポンスでこの期限を縮めない
         # （``subscription_periods.apply_current_period_end(..., only_extend=True)``）。
+        # ``pay_type`` はクエリパラメータで渡す（fincode 公式 SDK の cancel と同じ。ボディには
+        # 入れない）。これが無いと fincode は 400 を返す。
         return await self._client.request(
             "DELETE",
             f"/v1/subscriptions/{fincode_subscription_id}",
-        )
-
-    async def update_plan(
-        self,
-        *,
-        user_id: int,
-        fincode_subscription_id: str,
-        plan_id: str,
-        nonce: str,
-    ) -> dict[str, Any]:
-        return await self._client.request(
-            "PUT",
-            f"/v1/subscriptions/{fincode_subscription_id}",
-            json={
-                "pay_type": "Card",
-                "plan_id": plan_id,
-            },
-            idempotency_key=idem_key("sub.change_plan", user_id, nonce),
+            params={"pay_type": "Card"},
         )

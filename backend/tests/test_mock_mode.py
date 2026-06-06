@@ -139,8 +139,12 @@ async def test_paid_subscription_plan_change_updates_same_active_row(
     )
     assert change_resp.status_code == 200, change_resp.text
     changed = change_resp.json()
+    # ローカル行は同じものを使い回す（id 不変・行数は 1 のまま）。
     assert changed["id"] == created["id"]
-    assert changed["fincode_subscription_id"] == created["fincode_subscription_id"]
+    # 一方 fincode サブスクは作り直されるため ID は変わる（fincode は課金開始済み
+    # サブスクのプラン変更を拒否するので、解約→新プランで再作成する）。
+    assert changed["fincode_subscription_id"] != created["fincode_subscription_id"]
+    assert changed["fincode_subscription_id"].startswith("sub_mock_")
     assert changed["fincode_plan_id"] == "plan_mock_pro"
     assert changed["plan_amount"] == 1500
 

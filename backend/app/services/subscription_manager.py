@@ -26,6 +26,7 @@ from app.core.exceptions import (
     NotFoundError,
     UnprocessableError,
 )
+from app.core.logging import get_logger
 from app.models.fincode_card import FincodeCard
 from app.models.fincode_customer import FincodeCustomer
 from app.models.subscription import Subscription
@@ -43,6 +44,8 @@ from app.services.subscription_periods import (
     has_future_period,
     usable_subscription_conditions,
 )
+
+logger = get_logger(__name__)
 
 # 0円フリープランはアプリ側で合成する番兵プラン。fincode には存在しない
 # （fincode は 0 円プランを作成できない）。fincode のプランIDは生成トークン
@@ -294,12 +297,45 @@ class SubscriptionManager(BaseManager):
                 sub.fincode_subscription_id = raw.get("id")
                 apply_current_period_end(sub, raw)
             else:
-                raw = await self._subs.update_plan(
-                    user_id=user.id,
-                    fincode_subscription_id=sub.fincode_subscription_id,
-                    plan_id=plan["fincode_plan_id"],
-                    nonce=nonce,
-                )
+                # fincode は課金開始済みサブスクのプラン変更（PUT /v1/subscriptions/{id}）を
+                # 拒否する（ESC03194031「既に課金処理が開始されてます。対象のサブスクリプション
+                # は変更できません」）。そのため有料→有料の変更は、現行 fincode サブスクを解約し、
+                # 新プランで作り直して同じローカル ``subscriptions`` 行を更新する。fincode に日割りは
+                # 無く、新サブスクは新しい請求サイクルで開始される（apply_current_period_end は
+                # 新サブスクの期限で置き換える。only_extend は使わない）。
+                #
+                # 注意（非アトミック）: 解約と再作成は別 API 呼び出しでトランザクションにまとめられない。
+                # 解約成功後に再作成が失敗すると、fincode 上はサブスク無し・ローカル行は変更前へ
+                # ロールバックされ不整合になる。失敗はコンテキスト付きでログに残す。本番では補償
+                # （再試行・手動復旧導線）が必要。
+                card_id_for_change = card_id if card_id is not None else sub.fincode_card_id
+                if card_id_for_change is None:
+                    raise UnprocessableError(code="card_required")
+                card = await self._get_usable_card(db, user, card_id_for_change)
+                customer = await self._customers.ensure(db, user)
+                old_fincode_subscription_id = sub.fincode_subscription_id
+                await self._subs.cancel(fincode_subscription_id=old_fincode_subscription_id)
+                try:
+                    raw = await self._subs.create(
+                        user_id=user.id,
+                        customer_id=customer.fincode_customer_id,
+                        card_id=card.fincode_card_id,
+                        plan_id=plan["fincode_plan_id"],
+                        nonce=nonce,
+                    )
+                except Exception:
+                    # 解約は済んでいるが再作成に失敗。ローカル行はロールバックされ
+                    # fincode と不整合になる危険な状態。補償のため孤立した解約済み ID を残す。
+                    logger.error(
+                        "plan_change_recreate_failed",
+                        user_id=user.id,
+                        cancelled_fincode_subscription_id=old_fincode_subscription_id,
+                        target_plan_id=plan["fincode_plan_id"],
+                    )
+                    raise
+                sub.fincode_customer_id = customer.id
+                sub.fincode_card_id = card.id
+                sub.fincode_subscription_id = raw.get("id")
                 apply_current_period_end(sub, raw)
             _apply_plan_snapshot(sub, plan)
             sub.cancelled_at = None

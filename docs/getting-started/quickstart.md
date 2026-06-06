@@ -44,7 +44,6 @@ uv run alembic upgrade head    # 初回 + スキーマ更新時
 uv run uvicorn app.main:app --reload
 ```
 
-- ヘルスチェック: `http://localhost:8000/health`
 - Swagger UI: `http://localhost:8000/docs`
 
 ### ターミナル C：フロントエンド（http://localhost:5173）

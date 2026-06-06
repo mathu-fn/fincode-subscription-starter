@@ -56,6 +56,7 @@ class FincodeMockClient:
         path: str,
         *,
         json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         body = json or {}
@@ -101,7 +102,11 @@ class FincodeMockClient:
                 "status": "active",
                 "current_period_end": period_end.isoformat(),
             }
-        if method == "PUT" and path.startswith("/v1/subscriptions/") and not path.endswith("/cancel"):
+        if (
+            method == "PUT"
+            and path.startswith("/v1/subscriptions/")
+            and not path.endswith("/cancel")
+        ):
             period_end = datetime.now(UTC) + timedelta(days=30)
             return {
                 "id": path.rsplit("/", 1)[-1],
