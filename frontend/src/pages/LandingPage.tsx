@@ -18,34 +18,34 @@ const features: Array<{ title: string; description: string }> = [
       "fincode.js の UI コンポーネントを React に組み込み、PAN / CVC をバックエンドに送らずトークンのみを REST に渡します。"
   },
   {
-    title: "プラン表示と契約登録",
+    title: "プラン表示・契約・変更",
     description:
-      "fincode から契約可能なプラン一覧を取得し、契約時には plan_snapshot を JSONB で永続化して履歴の意味を保ちます。"
+      "アプリ内で用意した 0 円フリープランと fincode のプランをまとめて表示。契約とプラン変更ができ、契約した時点のプラン内容を plan_snapshot（JSONB）として保存するので、あとでプランが変わっても当時の契約内容がそのまま残ります。"
   },
   {
     title: "解約フロー",
     description:
-      "fincode 側の請求を停止し、有料契約は current_period_end まで active として扱います。期間切れ後はローカル status を cancelled に確定します。"
+      "fincode への請求を止めつつ、有料契約は支払い済みの期間が終わるまでは有効なまま扱います。期間が過ぎたら解約済みに切り替えます。"
   },
   {
     title: "Webhook 受信と冪等性",
     description:
-      "Fincode-Signature の HMAC-SHA256 検証 + webhook_events_seen と subscription_results upsert の二段冪等で再送に強い。"
+      "署名（Fincode-Signature / HMAC-SHA256）を検証したうえで、受信済みかどうかの記録と結果の upsert という二段構えの冪等処理で重複を防ぐので、同じ通知が再送されても壊れません。"
   },
   {
     title: "決済履歴 / ページング",
     description:
-      "subscription_results に 1 課金 1 行で書き込まれた決済結果を、フロントからページング付きで参照できます。"
+      "決済結果は 1 回の課金につき 1 行を subscription_results に記録。フロントからページングしながら確認できます。"
   },
   {
     title: "監査ログ",
     description:
-      "成功した業務操作は audit_logs に before / after JSONB で記録、失敗は構造化ログにのみ残し PII 漏洩を避けます。"
+      "成功した操作だけを audit_logs に変更前後（before / after）の形で記録。失敗は構造化ログだけに残し、個人情報が漏れないようにします。"
   },
   {
     title: "カード soft delete",
     description:
-      "fincode_cards.deleted_at で論理削除。過去契約と監査ログの説明可能性を維持し、誤削除からの復旧余地を残します。"
+      "カードは実際には消さず、fincode_cards.deleted_at に削除日時を立てる論理削除。過去の契約や監査ログを後からたどれるようにし、間違って消しても元に戻せる余地を残します。"
   },
   {
     title: "OpenAPI 仕様",
@@ -95,7 +95,7 @@ export function LandingPage() {
           <span className="text-sky-600">プロダクション水準で</span>取り込む。
         </h1>
         <p className="max-w-3xl text-base text-slate-700 sm:text-lg">
-          React + FastAPI で fincode の定期課金を実装する OSS リファレンスです。カードのトークン化、サブスクリプション登録・解約、Webhook の冪等処理、監査ログまで、そのまま自社サービスに取り込める形で提供します。
+          React + FastAPI で fincode の定期課金を実装する OSS リファレンスです。カードのトークン化、サブスクリプションの登録・変更・解約、Webhook の冪等処理、監査ログまで、そのまま自社サービスに取り込める形で提供します。
         </p>
         <div className="flex flex-wrap gap-3">
           <Link to="/register" className={primaryBtn}>
@@ -130,13 +130,13 @@ export function LandingPage() {
           <article className={cardClass}>
             <h3 className="text-lg font-bold text-sky-950">本番想定の堅牢な実装</h3>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
-              fincode 書き込みの Idempotency-Key 再利用、5xx / タイムアウト時のリトライ、Circuit Breaker、partial unique index による「1 ユーザー 1 アクティブ契約」の DB 保証など、エッジケースに最初から備えています。
+              fincode への書き込みでの Idempotency-Key 再利用、5xx / タイムアウト時のリトライ、Circuit Breaker、partial unique index による「1 ユーザーにつき有効な契約は 1 つ」の DB レベル保証など、見落としがちなケースにも最初から備えています。
             </p>
           </article>
           <article className={cardClass}>
             <h3 className="text-lg font-bold text-sky-950">自社サービスに移植しやすい</h3>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
-              fincode 直接呼び出しは <code className={codeChip}>app/services/fincode/</code> に閉じ込め、Manager 層と REST 層の責務が厳格に分かれています。ドメインロジックの切り出しが容易な構成です。
+              fincode の呼び出しは <code className={codeChip}>app/services/fincode/</code> にまとめ、Manager 層と REST 層の役割をはっきり分けています。自社サービスに必要なロジックだけを取り出しやすい構成です。
             </p>
           </article>
         </div>
@@ -174,7 +174,7 @@ Fincode Services           PostgreSQL
 FincodeHttpClient → fincode API`}
             </pre>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
-              逆方向の参照は禁止。fincode への HTTP 呼び出しは fincode サービス層に集中し、API ルートや Manager 層から直接 httpx を叩くことはありません。
+              依存は上から下への一方向だけ（逆向きの参照は禁止）。fincode への HTTP 呼び出しは fincode サービス層にまとめ、API ルートや Manager 層から直接 httpx を叩くことはありません。
             </p>
           </article>
           <article className={cardClass}>
@@ -216,7 +216,7 @@ FincodeHttpClient → fincode API`}
           <div className="max-w-2xl">
             <h2 className="text-2xl font-bold text-sky-950">まずはローカルで触ってみる。</h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              新規登録するとデモのダッシュボードに入り、カード追加 → プラン契約 → 履歴確認まで一通り試せます。fincode のテストカード番号で動作確認できます。
+              新規登録するとデモのダッシュボードに入り、カード追加 → プラン契約 → プラン変更 → 履歴確認まで一通り試せます。fincode のテストカード番号で動作確認できます。
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
