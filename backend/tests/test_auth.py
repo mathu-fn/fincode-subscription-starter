@@ -49,15 +49,67 @@ async def test_login_success(client: AsyncClient, registered_user: dict[str, Any
     assert response.json()["access_token"]
 
 
-async def test_login_wrong_password(
-    client: AsyncClient, registered_user: dict[str, Any]
-) -> None:
+async def test_login_wrong_password(client: AsyncClient, registered_user: dict[str, Any]) -> None:
     response = await client.post(
         "/api/login",
         json={"email": registered_user["user"]["email"], "password": "wrong-password"},
     )
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "invalid_credentials"
+
+
+async def test_login_unknown_email_returns_same_error(client: AsyncClient) -> None:
+    # 未登録メールでも誤パスワードと同じ 401 / invalid_credentials を返す
+    # （エラーコードからの列挙を防ぐ。タイミング差緩和の挙動も担保）。
+    response = await client.post(
+        "/api/login",
+        json={"email": "nobody@example.com", "password": "whatever-password"},
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "invalid_credentials"
+
+
+async def test_email_is_case_insensitive(client: AsyncClient) -> None:
+    register = await client.post(
+        "/api/register",
+        json={"name": "Carol", "email": "Carol@Example.com", "password": "supersecret123"},
+    )
+    assert register.status_code == 201, register.text
+    # 保存時に小文字へ正規化される。
+    assert register.json()["user"]["email"] == "carol@example.com"
+
+    # 大文字混じりでログインしても一致する。
+    login = await client.post(
+        "/api/login",
+        json={"email": "CAROL@EXAMPLE.COM", "password": "supersecret123"},
+    )
+    assert login.status_code == 200, login.text
+    assert login.json()["access_token"]
+
+
+async def test_register_duplicate_email_case_insensitive_returns_409(
+    client: AsyncClient,
+) -> None:
+    base = {"name": "Dave", "password": "supersecret123"}
+    first = await client.post("/api/register", json={**base, "email": "dave@example.com"})
+    assert first.status_code == 201, first.text
+    second = await client.post("/api/register", json={**base, "email": "Dave@Example.com"})
+    assert second.status_code == 409
+    assert second.json()["detail"]["code"] == "email_already_registered"
+
+
+async def test_token_missing_required_claims_rejected(client: AsyncClient) -> None:
+    import jwt
+
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    # exp を欠いた（=失効しない）トークンは require=["exp"] により拒否される。
+    forged = jwt.encode({"sub": "1"}, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    client.headers["Authorization"] = f"Bearer {forged}"
+    response = await client.get("/api/user")
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "invalid_token"
 
 
 async def test_session_status_with_token(auth_client: AsyncClient) -> None:
@@ -88,5 +140,9 @@ async def test_logout_writes_audit_log(auth_client: AsyncClient, db_session) -> 
     response = await auth_client.post("/api/logout")
     assert response.status_code == 200
 
-    rows = (await db_session.execute(select(AuditLog).where(AuditLog.event == "auth.logout"))).scalars().all()
+    rows = (
+        (await db_session.execute(select(AuditLog).where(AuditLog.event == "auth.logout")))
+        .scalars()
+        .all()
+    )
     assert len(rows) >= 1
