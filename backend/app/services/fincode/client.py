@@ -22,7 +22,37 @@ from app.core.exceptions import (
     FincodeServerError,
     FincodeTimeoutError,
 )
+from app.core.logging import get_logger
 from app.services.fincode.circuit_breaker import CircuitBreaker
+
+logger = get_logger(__name__)
+
+
+def _extract_fincode_error(response: httpx.Response) -> tuple[str | None, str | None]:
+    """fincode のエラーレスポンスから ``error_code`` / ``error_message`` を防御的に取り出す。
+
+    fincode のエラー本文は ``{"errors": [{"error_code", "error_message"}], "message"?}``
+    形式（公式 SDK fincode-sdk-node の APIErrorResponse 型）。本文が JSON でない・想定キーが
+    無い場合は ``(None, None)`` を返し、呼び出し側のログを妨げない。生レスポンス全体は
+    返さない（クライアントへ漏らさない・ログにも丸ごと出さないため）。
+    """
+    try:
+        data = response.json()
+    except ValueError:
+        return None, None
+    if not isinstance(data, dict):
+        return None, None
+    errors = data.get("errors")
+    if isinstance(errors, list) and errors and isinstance(errors[0], dict):
+        first = errors[0]
+        code = first.get("error_code")
+        message = first.get("error_message")
+        return (
+            str(code) if code is not None else None,
+            str(message) if message is not None else None,
+        )
+    message = data.get("message")
+    return None, str(message) if message is not None else None
 
 
 class FincodeClient(Protocol):
@@ -32,6 +62,7 @@ class FincodeClient(Protocol):
         path: str,
         *,
         json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]: ...
 
@@ -73,6 +104,7 @@ class FincodeHttpClient:
         path: str,
         *,
         json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         headers: dict[str, str] = {}
@@ -85,7 +117,9 @@ class FincodeHttpClient:
             self._breaker.before_call()
 
             try:
-                response = await self._client.request(method, path, json=json, headers=headers)
+                response = await self._client.request(
+                    method, path, json=json, params=params, headers=headers
+                )
             except httpx.TimeoutException as e:
                 self._breaker.record_failure()
                 last_exc = FincodeTimeoutError(str(e))
@@ -99,6 +133,19 @@ class FincodeHttpClient:
                     if status == 204 or not response.content:
                         return {}
                     return cast(dict[str, Any], response.json())
+
+                # fincode のエラーコード/メッセージだけをサーバ側ログに残し、原因を切り分け
+                # 可能にする。生本文・ヘッダ・カード/トークン/JWT は出さない。``fincode_response``
+                # は logging の伏字キーなので使わず、非センシティブなキー名で個別フィールドを出す。
+                fincode_error_code, fincode_error_message = _extract_fincode_error(response)
+                logger.warning(
+                    "fincode_api_error",
+                    method=method,
+                    path=path,
+                    status=status,
+                    fincode_error_code=fincode_error_code,
+                    fincode_error_message=fincode_error_message,
+                )
 
                 if status == 429:
                     retry_after_raw = response.headers.get("Retry-After")
