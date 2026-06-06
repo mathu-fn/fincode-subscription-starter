@@ -41,12 +41,8 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
 
     Instrumentator(
-        excluded_handlers=["/health", "/metrics"],
+        excluded_handlers=["/metrics"],
     ).instrument(app).expose(app, include_in_schema=False)
-
-    @app.get("/health")
-    def healthcheck() -> dict[str, str]:
-        return {"status": "ok", "service": "backend"}
 
     from app.api.router import api_router
 
