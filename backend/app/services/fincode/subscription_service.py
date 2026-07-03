@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
-from app.services.fincode.base import BaseFincodeService
+from app.services.fincode.base import FINCODE_TIMEZONE, BaseFincodeService
 from app.services.fincode.idempotency import idem_key
 
 
@@ -17,7 +17,9 @@ class FincodeSubscriptionService(BaseFincodeService):
         plan_id: str,
         nonce: str,
     ) -> dict[str, Any]:
-        start_date = datetime.now(UTC).strftime("%Y/%m/%d")
+        # fincode の日付境界は JST。UTC で日付を作ると JST 0:00〜8:59 に前日を
+        # 送ってしまい、過去日の start_date として拒否される。
+        start_date = datetime.now(FINCODE_TIMEZONE).strftime("%Y/%m/%d")
         return await self._client.request(
             "POST",
             "/v1/subscriptions",

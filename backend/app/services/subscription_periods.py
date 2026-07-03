@@ -2,15 +2,14 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import UTC, datetime
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.enums import SubscriptionStatus
 from app.models.subscription import Subscription
+from app.services.fincode.base import FINCODE_TIMEZONE
 
-FINCODE_TIMEZONE = ZoneInfo("Asia/Tokyo")
 # fincode のサブスクオブジェクトに ``current_period_end`` は存在しない（公式 SDK
 # fincode-sdk-node の型定義で確認）。支払い済み期限は ``next_charge_date``（次回課金日）で
 # 表現される。``stop_date`` は「解約発効日」であって支払い済み期限ではないため、

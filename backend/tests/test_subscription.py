@@ -249,6 +249,56 @@ async def test_change_paid_to_paid_plan_recreates_subscription(
     assert not any(r["method"] == "PUT" for r in fake_fincode.requests)
 
 
+async def test_subscribe_sends_start_date_in_jst(
+    auth_client: AsyncClient, fake_fincode: FakeFincodeClient
+) -> None:
+    # fincode の日付境界は JST。UTC で日付を作ると JST 0:00〜8:59 に前日の
+    # start_date を送ってしまい、過去日として拒否される。
+    from app.services.fincode.base import FINCODE_TIMEZONE
+
+    before = datetime.now(FINCODE_TIMEZONE).strftime("%Y/%m/%d")
+    await _create_paid_subscription(auth_client)
+    after = datetime.now(FINCODE_TIMEZONE).strftime("%Y/%m/%d")
+
+    req = _find_request(fake_fincode, "POST", "/v1/subscriptions")
+    # JST 深夜 0:00 をまたいだ場合だけ before と after が異なるため、両方許容する。
+    assert req["json"]["start_date"] in {before, after}
+
+
+async def test_plan_fetch_transient_error_returns_503_not_422(
+    auth_client: AsyncClient, app_instance
+) -> None:
+    # fincode 障害（5xx）中の契約は「プランが利用できない」（422 plan_unavailable）
+    # ではなく、一時的エラーとして 503 で返す（CLAUDE.md のエラーマッピング）。
+    from app.api.deps import get_fincode_client
+    from app.core.exceptions import FincodeServerError
+
+    class TransientFailureFincodeClient(FakeFincodeClient):
+        async def request(
+            self,
+            method: str,
+            path: str,
+            *,
+            json: dict[str, Any] | None = None,
+            params: dict[str, str] | None = None,
+            idempotency_key: str | None = None,
+        ) -> dict[str, Any]:
+            if method == "GET" and path.startswith("/v1/plans/"):
+                raise FincodeServerError()
+            return await super().request(
+                method, path, json=json, params=params, idempotency_key=idempotency_key
+            )
+
+    fake = TransientFailureFincodeClient()
+    app_instance.dependency_overrides[get_fincode_client] = lambda: fake
+
+    response = await auth_client.post(
+        "/api/subscription", json={"fincode_plan_id": "plan_test_pro"}
+    )
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"]["code"] == "fincode_server_error"
+
+
 async def test_change_paid_to_free_plan_cancels_with_pay_type_query(
     auth_client: AsyncClient, fake_fincode: FakeFincodeClient
 ) -> None:
