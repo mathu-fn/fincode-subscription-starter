@@ -405,27 +405,22 @@ class SubscriptionManager(BaseManager):
     async def list_history(
         self, db: AsyncSession, user: User, *, page: int, per_page: int
     ) -> tuple[list[SubscriptionResult], int]:
-        if page < 1:
-            page = 1
-        per_page = max(1, min(per_page, 100))
+        # page / per_page の範囲はルーターの Query(ge=1, le=100) が保証済み。
         offset = (page - 1) * per_page
-
-        sub_ids_stmt = select(Subscription.id).where(Subscription.user_id == user.id)
-        sub_ids = [row[0] for row in (await db.execute(sub_ids_stmt)).all()]
-        if not sub_ids:
-            return [], 0
 
         total = (
             await db.scalar(
                 select(func.count())
                 .select_from(SubscriptionResult)
-                .where(SubscriptionResult.subscription_id.in_(sub_ids))
+                .join(Subscription, SubscriptionResult.subscription_id == Subscription.id)
+                .where(Subscription.user_id == user.id)
             )
         ) or 0
 
         rows_stmt = (
             select(SubscriptionResult)
-            .where(SubscriptionResult.subscription_id.in_(sub_ids))
+            .join(Subscription, SubscriptionResult.subscription_id == Subscription.id)
+            .where(Subscription.user_id == user.id)
             .order_by(desc(SubscriptionResult.charged_at))
             .limit(per_page)
             .offset(offset)
