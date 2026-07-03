@@ -89,8 +89,14 @@ def cancel_at_period_end(sub: Subscription) -> bool:
     return sub.cancel_at_period_end
 
 
-def usable_subscription_conditions(now: datetime) -> tuple[ColumnElement[bool], ColumnElement[bool]]:
+def usable_subscription_conditions(
+    now: datetime,
+) -> tuple[ColumnElement[bool], ColumnElement[bool]]:
+    # unpaid は fincode 側のサブスクが生きている「使用中契約」なので含める。
+    # status の集合は DB の partial unique index ``uq_subscriptions_active_user``
+    # （``WHERE status IN ('active', 'unpaid')``）と一致させること。ずれると
+    # subscribe のアプリ層ガードと DB 制約の判定が食い違い、レース時の保証が崩れる。
     return (
-        Subscription.status == SubscriptionStatus.ACTIVE,
+        Subscription.status.in_([SubscriptionStatus.ACTIVE, SubscriptionStatus.UNPAID]),
         or_(Subscription.cancelled_at.is_(None), Subscription.current_period_end > now),
     )

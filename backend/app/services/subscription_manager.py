@@ -1,7 +1,9 @@
 """契約オーケストレーション。
 
-1ユーザー1アクティブ契約の不変条件は、partial unique index
-（``WHERE status = 'active'``）によって DB 層で強制される。これにより同時リクエストが
+1ユーザー1契約の不変条件は、partial unique index
+（``WHERE status IN ('active', 'unpaid')``）によって DB 層で強制される。unpaid を
+含めるのは fincode 側のサブスクが生きたまま新規契約（二重課金）を許さないため。
+これにより同時リクエストが
 両方とも成功することはない。このサービスは一般ケースがインデックスをヒットしないよう
 ``ConflictError`` を最初の協調的なガードとして発生させるが、
 インデックスこそがガードをレースセーフにしている。
@@ -102,7 +104,10 @@ class SubscriptionManager(BaseManager):
         now = datetime.now(UTC)
         stmt = select(Subscription).where(
             Subscription.user_id == user.id,
-            Subscription.status == SubscriptionStatus.ACTIVE,
+            # unpaid も対象に含める。解約予約中に未払いへ落ちた契約を期間満了で
+            # cancelled に確定させないと、get_active には見えないのに partial unique
+            # index には引っかかる行が残り、新規契約を永久にブロックしてしまう。
+            Subscription.status.in_([SubscriptionStatus.ACTIVE, SubscriptionStatus.UNPAID]),
             Subscription.cancelled_at.is_not(None),
             or_(Subscription.current_period_end.is_(None), Subscription.current_period_end <= now),
         )
