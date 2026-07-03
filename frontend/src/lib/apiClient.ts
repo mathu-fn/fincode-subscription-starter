@@ -77,9 +77,7 @@ export async function apiFetch<T = unknown>(
     }
     if (response.status === 401) {
       clearToken();
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("fincode:auth-cleared"));
-      }
+      window.dispatchEvent(new CustomEvent("fincode:auth-cleared"));
     }
     throw new ApiError(response.status, code, message, body as ApiErrorBody | null);
   }

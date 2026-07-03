@@ -38,9 +38,7 @@ export function Layout() {
         )}
         <div className="ml-auto flex items-center gap-4">
           {user ? (
-            <>
-              <span className="text-sm font-medium text-slate-600">{user.name}</span>
-            </>
+            <span className="text-sm font-medium text-slate-600">{user.name}</span>
           ) : (
             <NavLink
               to="/login"
