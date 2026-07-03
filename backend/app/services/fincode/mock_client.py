@@ -102,18 +102,6 @@ class FincodeMockClient:
                 "status": "active",
                 "current_period_end": period_end.isoformat(),
             }
-        if (
-            method == "PUT"
-            and path.startswith("/v1/subscriptions/")
-            and not path.endswith("/cancel")
-        ):
-            period_end = datetime.now(UTC) + timedelta(days=30)
-            return {
-                "id": path.rsplit("/", 1)[-1],
-                "status": "active",
-                "plan_id": body.get("plan_id"),
-                "current_period_end": period_end.isoformat(),
-            }
         if method == "DELETE" and path.startswith("/v1/subscriptions/"):
             return {"status": "canceled"}
 

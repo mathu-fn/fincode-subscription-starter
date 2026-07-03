@@ -1,7 +1,9 @@
 """契約オーケストレーション。
 
-1ユーザー1アクティブ契約の不変条件は、partial unique index
-（``WHERE status = 'active'``）によって DB 層で強制される。これにより同時リクエストが
+1ユーザー1契約の不変条件は、partial unique index
+（``WHERE status IN ('active', 'unpaid')``）によって DB 層で強制される。unpaid を
+含めるのは fincode 側のサブスクが生きたまま新規契約（二重課金）を許さないため。
+これにより同時リクエストが
 両方とも成功することはない。このサービスは一般ケースがインデックスをヒットしないよう
 ``ConflictError`` を最初の協調的なガードとして発生させるが、
 インデックスこそがガードをレースセーフにしている。
@@ -102,7 +104,10 @@ class SubscriptionManager(BaseManager):
         now = datetime.now(UTC)
         stmt = select(Subscription).where(
             Subscription.user_id == user.id,
-            Subscription.status == SubscriptionStatus.ACTIVE,
+            # unpaid も対象に含める。解約予約中に未払いへ落ちた契約を期間満了で
+            # cancelled に確定させないと、get_active には見えないのに partial unique
+            # index には引っかかる行が残り、新規契約を永久にブロックしてしまう。
+            Subscription.status.in_([SubscriptionStatus.ACTIVE, SubscriptionStatus.UNPAID]),
             Subscription.cancelled_at.is_not(None),
             or_(Subscription.current_period_end.is_(None), Subscription.current_period_end <= now),
         )
@@ -120,12 +125,10 @@ class SubscriptionManager(BaseManager):
         db: AsyncSession,
         user: User,
         card_id: int,
-        *,
-        missing_code: str = "card_not_found",
     ) -> FincodeCard:
         card = await db.get(FincodeCard, card_id)
         if card is None or card.deleted_at is not None:
-            raise NotFoundError("Card not found.", code=missing_code)
+            raise NotFoundError("Card not found.", code="card_not_found")
         if card.user_id != user.id:
             raise ForbiddenError()
 
@@ -176,9 +179,7 @@ class SubscriptionManager(BaseManager):
             plan = await self._plans.fetch(plan_id)
             if card_id is None:
                 raise UnprocessableError(code="card_required")
-            card = await self._get_usable_card(
-                db, user, card_id, missing_code="subscription_not_found"
-            )
+            card = await self._get_usable_card(db, user, card_id)
             customer = await self._customers.ensure(db, user)
 
         # クライアントの Idempotency-Key をノンスとして再利用することで、
@@ -204,19 +205,15 @@ class SubscriptionManager(BaseManager):
 
         if not is_free:
             assert card is not None and customer is not None
-            try:
-                raw = await self._subs.create(
-                    user_id=user.id,
-                    customer_id=customer.fincode_customer_id,
-                    card_id=card.fincode_card_id,
-                    plan_id=plan["fincode_plan_id"],
-                    nonce=nonce,
-                )
-            except Exception:
-                await db.delete(sub)
-                await db.flush()
-                raise
-
+            # fincode 契約作成が失敗した場合、例外はルーターの commit 前に伝播し、
+            # get_session の rollback が未コミットの先挿入行ごと破棄する（補償削除は不要）。
+            raw = await self._subs.create(
+                user_id=user.id,
+                customer_id=customer.fincode_customer_id,
+                card_id=card.fincode_card_id,
+                plan_id=plan["fincode_plan_id"],
+                nonce=nonce,
+            )
             sub.fincode_subscription_id = raw.get("id")
             apply_current_period_end(sub, raw)
             await db.flush()
@@ -401,27 +398,22 @@ class SubscriptionManager(BaseManager):
     async def list_history(
         self, db: AsyncSession, user: User, *, page: int, per_page: int
     ) -> tuple[list[SubscriptionResult], int]:
-        if page < 1:
-            page = 1
-        per_page = max(1, min(per_page, 100))
+        # page / per_page の範囲はルーターの Query(ge=1, le=100) が保証済み。
         offset = (page - 1) * per_page
-
-        sub_ids_stmt = select(Subscription.id).where(Subscription.user_id == user.id)
-        sub_ids = [row[0] for row in (await db.execute(sub_ids_stmt)).all()]
-        if not sub_ids:
-            return [], 0
 
         total = (
             await db.scalar(
                 select(func.count())
                 .select_from(SubscriptionResult)
-                .where(SubscriptionResult.subscription_id.in_(sub_ids))
+                .join(Subscription, SubscriptionResult.subscription_id == Subscription.id)
+                .where(Subscription.user_id == user.id)
             )
         ) or 0
 
         rows_stmt = (
             select(SubscriptionResult)
-            .where(SubscriptionResult.subscription_id.in_(sub_ids))
+            .join(Subscription, SubscriptionResult.subscription_id == Subscription.id)
+            .where(Subscription.user_id == user.id)
             .order_by(desc(SubscriptionResult.charged_at))
             .limit(per_page)
             .offset(offset)

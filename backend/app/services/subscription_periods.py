@@ -2,15 +2,14 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import UTC, datetime
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.enums import SubscriptionStatus
 from app.models.subscription import Subscription
+from app.services.fincode.base import FINCODE_TIMEZONE
 
-FINCODE_TIMEZONE = ZoneInfo("Asia/Tokyo")
 # fincode のサブスクオブジェクトに ``current_period_end`` は存在しない（公式 SDK
 # fincode-sdk-node の型定義で確認）。支払い済み期限は ``next_charge_date``（次回課金日）で
 # 表現される。``stop_date`` は「解約発効日」であって支払い済み期限ではないため、
@@ -90,8 +89,14 @@ def cancel_at_period_end(sub: Subscription) -> bool:
     return sub.cancel_at_period_end
 
 
-def usable_subscription_conditions(now: datetime) -> tuple[ColumnElement[bool], ColumnElement[bool]]:
+def usable_subscription_conditions(
+    now: datetime,
+) -> tuple[ColumnElement[bool], ColumnElement[bool]]:
+    # unpaid は fincode 側のサブスクが生きている「使用中契約」なので含める。
+    # status の集合は DB の partial unique index ``uq_subscriptions_active_user``
+    # （``WHERE status IN ('active', 'unpaid')``）と一致させること。ずれると
+    # subscribe のアプリ層ガードと DB 制約の判定が食い違い、レース時の保証が崩れる。
     return (
-        Subscription.status == SubscriptionStatus.ACTIVE,
+        Subscription.status.in_([SubscriptionStatus.ACTIVE, SubscriptionStatus.UNPAID]),
         or_(Subscription.cancelled_at.is_(None), Subscription.current_period_end > now),
     )

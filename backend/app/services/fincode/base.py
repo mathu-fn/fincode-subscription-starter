@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from zoneinfo import ZoneInfo
+
 from app.services.fincode.client import FincodeClient
+
+# fincode は日本のサービスであり、日付境界（start_date や課金日）は JST で解釈される。
+FINCODE_TIMEZONE = ZoneInfo("Asia/Tokyo")
 
 
 class BaseFincodeService:

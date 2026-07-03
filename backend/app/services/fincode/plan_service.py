@@ -1,17 +1,22 @@
-"""小さなインメモリ TTL キャッシュを持つ fincode プランサービス。
+"""fincode プランサービス。
 
-プランの正本は fincode 側にある。キャッシュは ``GET /api/subscription/plans`` の
-レイテンシを削減するが、プラン編集が素早く反映されるよう TTL は短く（60秒）保つ。
+プランの正本は fincode 側にある。キャッシュは持たず、プラン編集が即座に
+反映されるよう毎回 fincode に問い合わせる。
 """
 
 from __future__ import annotations
 
-import time
 from typing import Any, TypedDict
 
-from app.core.exceptions import UnprocessableError
+from app.core.exceptions import (
+    CircuitBreakerOpenError,
+    FincodeApiError,
+    FincodeRateLimitError,
+    FincodeServerError,
+    FincodeTimeoutError,
+    UnprocessableError,
+)
 from app.services.fincode.base import BaseFincodeService
-from app.services.fincode.client import FincodeClient
 
 
 class PlanData(TypedDict):
@@ -31,13 +36,6 @@ class PlanData(TypedDict):
 
 
 class FincodePlanService(BaseFincodeService):
-    _cache_ttl = 60.0
-
-    def __init__(self, client: FincodeClient) -> None:
-        super().__init__(client)
-        self._list_cache: tuple[float, list[PlanData]] | None = None
-        self._plan_cache: dict[str, tuple[float, PlanData]] = {}
-
     @staticmethod
     def _is_active(raw: dict[str, Any]) -> bool:
         # fincode は削除済みプランを delete_flag="1"（文字列）でマークする。
@@ -61,34 +59,33 @@ class FincodePlanService(BaseFincodeService):
         }
 
     async def list_active(self) -> list[PlanData]:
-        now = time.monotonic()
-        if self._list_cache and (now - self._list_cache[0]) < self._cache_ttl:
-            return self._list_cache[1]
         response = await self._client.request("GET", "/v1/plans")
         items = response.get("list", [])
-        result = [
+        return [
             self._normalise(item)
             for item in items
             if isinstance(item, dict) and self._is_active(item)
         ]
-        self._list_cache = (now, result)
-        return result
 
     async def fetch(self, plan_id: str) -> PlanData:
-        now = time.monotonic()
-        cached = self._plan_cache.get(plan_id)
-        if cached and (now - cached[0]) < self._cache_ttl:
-            return cached[1]
+        # 一時的な失敗（5xx / タイムアウト / レート制限 / サーキットオープン）を
+        # ``plan_unavailable``（422）へ変換してはいけない — fincode 障害を「この
+        # プランは利用できない」という恒久エラーとして見せてしまう。例外ハンドラが
+        # 503/504/429 を返せるよう再送出し、4xx 相当の素の ``FincodeApiError``
+        # （プランが存在しない等）だけを 422 に翻訳する。
         try:
             raw = await self._client.request("GET", f"/v1/plans/{plan_id}")
-        except Exception as e:
-            raise UnprocessableError(f"Plan {plan_id} is not available.", code="plan_unavailable") from e
+        except (
+            FincodeServerError,
+            FincodeTimeoutError,
+            FincodeRateLimitError,
+            CircuitBreakerOpenError,
+        ):
+            raise
+        except FincodeApiError as e:
+            raise UnprocessableError(
+                f"Plan {plan_id} is not available.", code="plan_unavailable"
+            ) from e
         if not self._is_active(raw):
             raise UnprocessableError(f"Plan {plan_id} is not active.", code="plan_unavailable")
-        normalised = self._normalise(raw)
-        self._plan_cache[plan_id] = (now, normalised)
-        return normalised
-
-    def invalidate(self) -> None:
-        self._list_cache = None
-        self._plan_cache.clear()
+        return self._normalise(raw)

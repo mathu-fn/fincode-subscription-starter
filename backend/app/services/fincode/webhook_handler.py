@@ -88,7 +88,7 @@ class FincodeWebhookHandler:
             "subscription.payment.succeeded",
             "subscription.payment.failed",
         }:
-            await self._handle_payment(body, db, seen)
+            await self._handle_payment(body, db, seen, event_type=event_type)
         elif event_type in {"subscription.canceled", "subscription.cancelled"}:
             await self._handle_cancellation(body, db)
         else:
@@ -97,7 +97,7 @@ class FincodeWebhookHandler:
         await db.commit()
 
     async def _handle_payment(
-        self, body: dict[str, Any], db: AsyncSession, seen: WebhookEventSeen
+        self, body: dict[str, Any], db: AsyncSession, seen: WebhookEventSeen, *, event_type: str
     ) -> None:
         data = body.get("data", body)
         fincode_sub_id = data.get("subscription_id") or data.get("fincode_subscription_id")
@@ -119,11 +119,10 @@ class FincodeWebhookHandler:
         except (TypeError, ValueError):
             amount = 0
 
-        status_value = data.get("status") or (
-            PaymentStatus.SUCCEEDED
-            if "succeeded" in (body.get("event") or "")
-            else PaymentStatus.FAILED
-        )
+        # 成否の正本はイベント名。fincode の生 ``status``（"CAPTURED" 等の独自文字列）は
+        # 判定に使わず ``fincode_response`` JSONB にそのまま保存する。
+        succeeded = "succeeded" in event_type
+        status_value = PaymentStatus.SUCCEEDED if succeeded else PaymentStatus.FAILED
         charged_at = _parse_charged_at(data.get("charged_at") or data.get("process_date"))
 
         stmt = (
@@ -149,7 +148,14 @@ class FincodeWebhookHandler:
         )
         await db.execute(stmt)
 
-        if status_value in {PaymentStatus.FAILED, SubscriptionStatus.UNPAID}:
+        if succeeded:
+            # 課金成功は支払い済み期限を延ばす方向にのみ作用させる（only_extend）。
+            apply_current_period_end(sub, data, only_extend=True)
+            if sub.status == SubscriptionStatus.UNPAID:
+                sub.status = SubscriptionStatus.ACTIVE
+        elif sub.status == SubscriptionStatus.ACTIVE:
+            # 失敗で UNPAID にするのは ACTIVE からのみ。解約済み契約への遅延 failed で
+            # CANCELLED を上書きすると partial unique index と衝突し再配信ループになる。
             sub.status = SubscriptionStatus.UNPAID
 
         await self._audit.record(

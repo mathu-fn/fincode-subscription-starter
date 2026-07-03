@@ -261,6 +261,69 @@ describe("HomePage cards section", () => {
     });
   });
 
+  it("treats an unpaid subscription as the current subscription (badge, plan change button, cancel button)", async () => {
+    mocks.apiFetch.mockImplementation((path: string) => {
+      if (path === "/api/subscription") {
+        return Promise.resolve({
+          id: 1,
+          status: "unpaid",
+          fincode_subscription_id: "sub_mock_1",
+          fincode_plan_id: "plan_mock_basic",
+          plan_name: "ベーシック",
+          plan_amount: 500,
+          plan_interval: "month",
+          cancelled_at: null,
+          current_period_end: null,
+          cancel_at_period_end: false,
+          created_at: "2026-01-01T00:00:00Z"
+        });
+      }
+      if (path === "/api/subscription/plans") {
+        return Promise.resolve([
+          {
+            fincode_plan_id: "plan_mock_basic",
+            name: "ベーシック",
+            amount: 500,
+            currency: "JPY",
+            interval: "month"
+          },
+          {
+            fincode_plan_id: "plan_mock_pro",
+            name: "プロ",
+            amount: 1500,
+            currency: "JPY",
+            interval: "month"
+          }
+        ]);
+      }
+      if (path === "/api/subscription/cards") return Promise.resolve([]);
+      if (path.startsWith("/api/subscription/history")) {
+        return Promise.resolve({ data: [], page: 1, per_page: 10, total: 0 });
+      }
+      return Promise.resolve(null);
+    });
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>
+    );
+
+    // 未払いバッジと案内文が表示される（サマリーと契約セクションの複数箇所に出る）。
+    await waitFor(() => {
+      expect(screen.getAllByText("未払い").length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText(/お支払いが確認できませんでした/)).toBeInTheDocument();
+
+    // 新規契約（POST は 409 になる）ではなくプラン変更ボタンになる。
+    expect(screen.getByRole("button", { name: "このプランに変更" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "このプランを契約" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "現在のプラン" })).toBeDisabled();
+
+    // 未払い中でも解約はできる。
+    expect(screen.getByRole("button", { name: "解約する" })).toBeInTheDocument();
+  });
+
   it("uses the plan change endpoint when an active subscription already exists", async () => {
     mocks.apiFetch.mockImplementation((path: string, init?: RequestInit) => {
       if (path === "/api/subscription" && init?.method === "PATCH") {

@@ -1,16 +1,28 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.enums import SubscriptionStatus
-from app.models.base import Base
+from app.models.base import Base, TimestampMixin
 
 
-class Subscription(Base):
+class Subscription(Base, TimestampMixin):
     __tablename__ = "subscriptions"
+    __table_args__ = (
+        # 「1 ユーザー最大 1 契約」の DB 保証。unpaid は fincode 側のサブスクが
+        # 生きているため対象に含める（含めないと未払い中に新規契約が作れて二重課金）。
+        # 述語は app.services.subscription_periods.usable_subscription_conditions と
+        # 一致させること。
+        Index(
+            "uq_subscriptions_active_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status IN ('active', 'unpaid')"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     user_id: Mapped[int] = mapped_column(
@@ -38,12 +50,6 @@ class Subscription(Base):
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     current_period_end: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     @property

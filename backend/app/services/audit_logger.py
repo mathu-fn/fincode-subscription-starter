@@ -12,29 +12,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-_REDACT_KEYS = {
-    "password",
-    "password_hash",
-    "token",
-    "access_token",
-    "card_number",
-    "pan",
-    "cvc",
-    "fincode_response",
-    "secret",
-    "authorization",
-    "api_key",
-}
-
-
-def _scrub(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            k: ("***" if k.lower() in _REDACT_KEYS else _scrub(v)) for k, v in value.items()
-        }
-    if isinstance(value, list):
-        return [_scrub(item) for item in value]
-    return value
+from app.core.redaction import scrub
 
 
 class AuditLogger:
@@ -57,8 +35,8 @@ class AuditLogger:
             event=event,
             auditable_type=auditable_type,
             auditable_id=auditable_id,
-            before=_scrub(before) if before is not None else None,
-            after=_scrub(after) if after is not None else None,
+            before=scrub(before) if before is not None else None,
+            after=scrub(after) if after is not None else None,
         )
         session.add(log)
 
