@@ -68,7 +68,9 @@ class FincodeWebhookHandler:
         event_type = body.get("event") or body.get("type") or "unknown"
 
         if not event_id:
-            raise UnauthenticatedError("Missing event_id in webhook payload.", code="invalid_webhook_signature")
+            raise UnauthenticatedError(
+                "Missing event_id in webhook payload.", code="invalid_webhook_signature"
+            )
 
         # webhook_events_seen への INSERT で重複排除する。UNIQUE 制約違反が発生した場合、
         # そのイベントは既に処理済みのため変更なしで 204 ACK を返す。
@@ -169,7 +171,6 @@ class FincodeWebhookHandler:
         )
         if sub is None:
             return
-        # 解約 Webhook は支払い済み期限を縮めてはならない（only_extend）。
         apply_current_period_end(sub, data, only_extend=True)
         now = datetime.now(UTC)
         if has_future_period(sub, now):

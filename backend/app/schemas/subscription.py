@@ -35,7 +35,7 @@ class PlanOut(BaseModel):
     fincode_plan_id: str
     name: str
     amount: int
-    currency: str = "JPY"
+    currency: str
     interval: str
 
 
