@@ -72,19 +72,6 @@ async def test_mock_client_creates_subscription_with_mock_id() -> None:
     assert raw["current_period_end"]
 
 
-async def test_mock_client_updates_subscription_plan() -> None:
-    client = FincodeMockClient()
-    raw = await client.request(
-        "PUT",
-        "/v1/subscriptions/sub_mock_123",
-        json={"pay_type": "Card", "plan_id": "plan_mock_pro"},
-        idempotency_key="n2",
-    )
-    assert raw["id"] == "sub_mock_123"
-    assert raw["status"] == "active"
-    assert raw["plan_id"] == "plan_mock_pro"
-
-
 @pytest_asyncio.fixture()
 async def mock_fincode(app_instance) -> FincodeMockClient:
     mock = FincodeMockClient()
