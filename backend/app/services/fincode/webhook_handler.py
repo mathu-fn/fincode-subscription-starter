@@ -177,7 +177,6 @@ class FincodeWebhookHandler:
         )
         if sub is None:
             return
-        # 解約 Webhook は支払い済み期限を縮めてはならない（only_extend）。
         apply_current_period_end(sub, data, only_extend=True)
         now = datetime.now(UTC)
         if has_future_period(sub, now):

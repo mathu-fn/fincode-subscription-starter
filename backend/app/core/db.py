@@ -16,11 +16,8 @@ def create_db_engine(database_url: str) -> AsyncEngine:
 
 
 def create_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
-    """Create the application session factory.
-
-    トランザクションは各サービスが ``session.begin()`` で開く責務を持つ。
-    リクエスト終了時にセッションはクローズされるが、自動コミットは行わない。
-    """
+    """自動コミットしないセッションファクトリ。コミットはルーター層が明示的に行い、
+    Manager 層は ``flush`` まで。リクエスト終了時にセッションはクローズされる。"""
     return async_sessionmaker(
         bind=engine,
         class_=AsyncSession,

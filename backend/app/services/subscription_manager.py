@@ -118,7 +118,6 @@ class SubscriptionManager(BaseManager):
             await db.flush()
 
     async def list_plans(self) -> list[PlanData]:
-        # フリープランを先頭に注入してから fincode のプランを並べる。
         return [FREE_PLAN, *await self._plans.list_active()]
 
     async def _get_usable_card(
@@ -134,7 +133,7 @@ class SubscriptionManager(BaseManager):
             raise ForbiddenError()
 
         now = datetime.now(UTC)
-        # exp_year は 4 桁で保存される。exp の日付が現在より前なら期限切れ。
+        # exp_year は 4 桁で保存される。
         if (card.exp_year, card.exp_month) < (now.year, now.month):
             raise UnprocessableError(code="expired_card")
         return card
@@ -172,8 +171,6 @@ class SubscriptionManager(BaseManager):
 
         is_free = plan_id == FREE_PLAN_ID
 
-        # プラン・カード・顧客を解決する。フリープランは fincode を介さずローカルで
-        # 完結するため、プラン情報は合成し、カード/顧客は持たない。
         card: FincodeCard | None = None
         customer: FincodeCustomer | None = None
         if is_free:
@@ -182,7 +179,6 @@ class SubscriptionManager(BaseManager):
             plan = await self._plans.fetch(plan_id)
             if card_id is None:
                 raise UnprocessableError(code="card_required")
-            # このユーザーのカードであり、削除・期限切れでないことを確認する。
             card = await self._get_usable_card(db, user, card_id)
             customer = await self._customers.ensure(db, user)
 
@@ -207,7 +203,6 @@ class SubscriptionManager(BaseManager):
             await db.rollback()
             raise ConflictError(code="active_subscription_exists") from e
 
-        # フリープランは fincode 契約を作らない（fincode_subscription_id は None のまま）。
         if not is_free:
             assert card is not None and customer is not None
             # fincode 契約作成が失敗した場合、例外はルーターの commit 前に伝播し、
@@ -364,7 +359,6 @@ class SubscriptionManager(BaseManager):
         if cancel_at_period_end(sub):
             return sub
         if sub.fincode_subscription_id is None:
-            # ローカルのみの行; ステータスを反転するだけ。
             sub.status = SubscriptionStatus.CANCELLED
             sub.cancelled_at = datetime.now(UTC)
             await db.flush()
@@ -375,7 +369,6 @@ class SubscriptionManager(BaseManager):
             "cancel_at_period_end": False,
         }
         raw = await self._subs.cancel(fincode_subscription_id=sub.fincode_subscription_id)
-        # 解約レスポンスは支払い済み期限を縮めてはならない（only_extend）。
         apply_current_period_end(sub, raw, only_extend=True)
         sub.cancelled_at = datetime.now(UTC)
         if has_future_period(sub):

@@ -54,13 +54,13 @@ class Subscription(Base, TimestampMixin):
 
     @property
     def cancel_at_period_end(self) -> bool:
+        # current_period_end は DateTime(timezone=True) カラムで、書き込みも
+        # 常に tz-aware UTC（subscription_periods.apply_current_period_end）。
+        period_end = self.current_period_end
         if (
             self.status != SubscriptionStatus.ACTIVE
             or self.cancelled_at is None
-            or self.current_period_end is None
+            or period_end is None
         ):
             return False
-        period_end = self.current_period_end
-        if period_end.tzinfo is None:
-            period_end = period_end.replace(tzinfo=UTC)
         return period_end > datetime.now(UTC)

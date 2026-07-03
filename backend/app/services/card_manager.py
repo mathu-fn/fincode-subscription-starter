@@ -108,9 +108,7 @@ class CardManager(BaseManager):
         if active.scalars().first() is not None:
             raise ConflictError(code="card_in_use")
 
-        customer = await db.get(FincodeCustomer, card.fincode_customer_id)
-        if customer is None:
-            raise NotFoundError(code="card_not_found")
+        customer = await db.get_one(FincodeCustomer, card.fincode_customer_id)
 
         await self._card_service.delete(
             customer_id=customer.fincode_customer_id,

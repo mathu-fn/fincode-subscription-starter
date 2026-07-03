@@ -53,7 +53,7 @@ export function HomePage() {
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cardPendingDelete, setCardPendingDelete] = useState<Card | null>(null);
-  const [showCardForm, setShowCardForm] = useState<boolean>(false);
+  const [showCardForm, setShowCardForm] = useState(false);
   const [cardFormLoading, setCardFormLoading] = useState(false);
   const [mockToken, setMockToken] = useState("tok_mock_visa");
   const [page, setPage] = useState(1);
@@ -249,10 +249,8 @@ export function HomePage() {
       } else {
         const bundle = fincodeRef.current;
         if (!bundle) throw new Error("fincode UI コンポーネントが初期化されていません。");
+        // トークンが取れなかった場合は tokenizeViaUi 自身が throw する。
         token = await tokenizeViaUi(bundle.fincode, bundle.ui);
-        if (!token) {
-          throw new Error("カードトークンの取得に失敗しました。");
-        }
       }
       await apiFetch("/api/subscription/cards", {
         method: "POST",

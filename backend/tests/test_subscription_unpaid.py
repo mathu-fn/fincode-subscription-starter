@@ -15,6 +15,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import SubscriptionStatus
 from app.models.subscription import Subscription
@@ -32,7 +33,7 @@ async def fake_fincode(app_instance) -> FakeFincodeClient:
 
 async def _create_unpaid_subscription(
     auth_client: AsyncClient,
-    db_session,
+    db_session: AsyncSession,
     *,
     current_period_end: datetime | None = None,
     cancelled_at: datetime | None = None,
