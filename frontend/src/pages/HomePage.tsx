@@ -421,7 +421,12 @@ export function HomePage() {
                 この契約は {formatDateTime(sub.current_period_end)} まで利用できます。
               </p>
             )}
-            {sub.status === "active" && !sub.cancel_at_period_end && (
+            {sub.status === "unpaid" && (
+              <p className="mt-6 text-sm font-semibold text-rose-700">
+                お支払いが確認できませんでした。カードをご確認のうえ変更いただくか、プランを変更してください。
+              </p>
+            )}
+            {(sub.status === "active" || sub.status === "unpaid") && !sub.cancel_at_period_end && (
               <p className="mt-6">
                 <LoadingButton type="button" variant="danger" isLoading={cancelling} loadingLabel="解約中..." onClick={() => setShowCancelConfirm(true)}>
                   解約する
@@ -467,7 +472,9 @@ export function HomePage() {
             )}
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {plans.map((plan) => {
-                const activeSub = sub?.status === "active" ? sub : null;
+                // unpaid も「現契約あり」として扱う。新規契約（POST）はバックエンドが
+                // 409 (active_subscription_exists) で拒否するため、プラン変更（PATCH）に流す。
+                const activeSub = sub && (sub.status === "active" || sub.status === "unpaid") ? sub : null;
                 const isCurrentPlan = activeSub?.fincode_plan_id === plan.fincode_plan_id;
                 const planChangeBlocked = activeSub?.cancel_at_period_end ?? false;
                 const isFreeToPaid =
