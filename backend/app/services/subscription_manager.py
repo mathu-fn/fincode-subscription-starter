@@ -210,19 +210,15 @@ class SubscriptionManager(BaseManager):
         # フリープランは fincode 契約を作らない（fincode_subscription_id は None のまま）。
         if not is_free:
             assert card is not None and customer is not None
-            try:
-                raw = await self._subs.create(
-                    user_id=user.id,
-                    customer_id=customer.fincode_customer_id,
-                    card_id=card.fincode_card_id,
-                    plan_id=plan["fincode_plan_id"],
-                    nonce=nonce,
-                )
-            except Exception:
-                await db.delete(sub)
-                await db.flush()
-                raise
-
+            # fincode 契約作成が失敗した場合、例外はルーターの commit 前に伝播し、
+            # get_session の rollback が未コミットの先挿入行ごと破棄する（補償削除は不要）。
+            raw = await self._subs.create(
+                user_id=user.id,
+                customer_id=customer.fincode_customer_id,
+                card_id=card.fincode_card_id,
+                plan_id=plan["fincode_plan_id"],
+                nonce=nonce,
+            )
             sub.fincode_subscription_id = raw.get("id")
             apply_current_period_end(sub, raw)
             await db.flush()
