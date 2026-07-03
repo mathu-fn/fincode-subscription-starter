@@ -5,9 +5,7 @@ from typing import Any
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from app.core.config import Settings
-
-limiter: Limiter
+from app.core.config import Settings, get_settings
 
 
 def _key_func(request: Any) -> str:
@@ -28,10 +26,10 @@ def create_limiter(settings: Settings) -> Limiter:
     )
 
 
-def configure_limiter(settings: Settings) -> Limiter:
-    global limiter
-    limiter = create_limiter(settings)
-    return limiter
+# import 時に一度だけ生成するシングルトン。slowapi のデコレータはデコレート時の
+# インスタンスを閉じ込め、ミドルウェアは app.state.limiter を参照するため、
+# 両者が常に同一インスタンスを共有している必要がある。
+limiter: Limiter = create_limiter(get_settings())
 
 
 def get_limiter() -> Limiter:

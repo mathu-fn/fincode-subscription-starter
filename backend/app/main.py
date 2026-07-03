@@ -5,12 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi.middleware import SlowAPIMiddleware
 
+from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.exception_handlers import register_exception_handlers
 from app.core.lifespan import lifespan
 from app.core.logging import configure_logging
 from app.core.middleware import RequestLogMiddleware
-from app.core.rate_limit import configure_limiter
+from app.core.rate_limit import limiter
 
 
 def create_app() -> FastAPI:
@@ -25,7 +26,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    limiter = configure_limiter(settings)
     app.state.limiter = limiter
     app.add_middleware(SlowAPIMiddleware)
     app.add_middleware(RequestLogMiddleware)
@@ -43,8 +43,6 @@ def create_app() -> FastAPI:
     Instrumentator(
         excluded_handlers=["/metrics"],
     ).instrument(app).expose(app, include_in_schema=False)
-
-    from app.api.router import api_router
 
     app.include_router(api_router)
 
