@@ -15,36 +15,10 @@ from typing import Any, cast
 import structlog
 from structlog.typing import FilteringBoundLogger
 
-_SENSITIVE_KEYS = {
-    "password",
-    "password_hash",
-    "token",
-    "access_token",
-    "refresh_token",
-    "authorization",
-    "card",
-    "card_number",
-    "pan",
-    "cvc",
-    "fincode_signature",
-    "x-api-key",
-    "api_key",
-    "fincode_response",
-    "secret",
-}
+from app.core.redaction import scrub
 
 
 def _redact(_: Any, __: str, event_dict: MutableMapping[str, Any]) -> Mapping[str, Any]:
-    def scrub(value: Any) -> Any:
-        if isinstance(value, dict):
-            return {
-                k: ("***" if k.lower() in _SENSITIVE_KEYS else scrub(v))
-                for k, v in value.items()
-            }
-        if isinstance(value, list):
-            return [scrub(item) for item in value]
-        return value
-
     scrubbed = scrub(dict(event_dict))
     if isinstance(scrubbed, Mapping):
         return scrubbed
