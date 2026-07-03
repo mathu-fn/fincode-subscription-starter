@@ -126,12 +126,10 @@ class SubscriptionManager(BaseManager):
         db: AsyncSession,
         user: User,
         card_id: int,
-        *,
-        missing_code: str = "card_not_found",
     ) -> FincodeCard:
         card = await db.get(FincodeCard, card_id)
         if card is None or card.deleted_at is not None:
-            raise NotFoundError("Card not found.", code=missing_code)
+            raise NotFoundError("Card not found.", code="card_not_found")
         if card.user_id != user.id:
             raise ForbiddenError()
 
@@ -185,9 +183,7 @@ class SubscriptionManager(BaseManager):
             if card_id is None:
                 raise UnprocessableError(code="card_required")
             # このユーザーのカードであり、削除・期限切れでないことを確認する。
-            card = await self._get_usable_card(
-                db, user, card_id, missing_code="subscription_not_found"
-            )
+            card = await self._get_usable_card(db, user, card_id)
             customer = await self._customers.ensure(db, user)
 
         # クライアントの Idempotency-Key をノンスとして再利用することで、

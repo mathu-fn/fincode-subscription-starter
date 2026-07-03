@@ -115,6 +115,18 @@ async def test_subscribe_paid_plan_requires_card(
     assert response.json()["detail"]["code"] == "card_required"
 
 
+async def test_subscribe_with_missing_card_returns_card_not_found(
+    auth_client: AsyncClient, fake_fincode: FakeFincodeClient
+) -> None:
+    # 存在しないカード ID での契約は 404 (card_not_found)。
+    # subscription_not_found と取り違えない（コードとメッセージの整合性）。
+    response = await auth_client.post(
+        "/api/subscription", json={"fincode_plan_id": "plan_test_pro", "card_id": 999999}
+    )
+    assert response.status_code == 404, response.text
+    assert response.json()["detail"]["code"] == "card_not_found"
+
+
 async def test_cancel_free_plan_is_local_only(
     auth_client: AsyncClient, fake_fincode: FakeFincodeClient
 ) -> None:
