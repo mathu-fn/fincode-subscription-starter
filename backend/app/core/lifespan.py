@@ -44,7 +44,5 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        aclose = getattr(fincode_client, "aclose", None)
-        if aclose is not None:
-            await aclose()
+        await fincode_client.aclose()
         await engine.dispose()

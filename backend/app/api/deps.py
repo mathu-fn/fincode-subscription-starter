@@ -38,21 +38,17 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
         raise RuntimeError("Database sessionmaker is not initialized.")
 
     async with sessionmaker() as session:
-        try:
-            yield session
-        except Exception:
-            await session.rollback()
-            raise
+        yield session
 
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 def _extract_bearer(credentials: HTTPAuthorizationCredentials | None) -> str:
+    # HTTPBearer(auto_error=False) は scheme が bearer かつ値が非空のときだけ
+    # credentials を返すため、None チェックだけで十分。
     if credentials is None:
         raise UnauthenticatedError("Missing Authorization header.")
-    if credentials.scheme.lower() != "bearer" or not credentials.credentials:
-        raise UnauthenticatedError("Invalid Authorization header.")
     return credentials.credentials
 
 
@@ -69,11 +65,9 @@ async def get_current_user(
     except jwt.InvalidTokenError as e:
         raise UnauthenticatedError(code="invalid_token") from e
 
-    user_id_raw = payload.get("sub")
-    if not user_id_raw:
-        raise UnauthenticatedError("Invalid token subject.", code="invalid_credentials")
+    # decode_token が sub を必須クレームにしているため存在は保証済み。
     try:
-        user_id = int(user_id_raw)
+        user_id = int(payload["sub"])
     except (TypeError, ValueError) as e:
         raise UnauthenticatedError("Invalid token subject.", code="invalid_credentials") from e
 

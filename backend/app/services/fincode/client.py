@@ -66,6 +66,8 @@ class FincodeClient(Protocol):
         idempotency_key: str | None = None,
     ) -> dict[str, Any]: ...
 
+    async def aclose(self) -> None: ...
+
 
 class FincodeHttpClient:
     def __init__(
