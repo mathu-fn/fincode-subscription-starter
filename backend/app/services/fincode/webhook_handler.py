@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import PaymentStatus, SubscriptionStatus
-from app.core.exceptions import UnauthenticatedError
+from app.core.exceptions import UnauthenticatedError, UnprocessableError
 from app.core.logging import get_logger
 from app.models.subscription import Subscription
 from app.models.subscription_result import SubscriptionResult
@@ -33,6 +33,7 @@ from app.services.subscription_periods import (
     apply_current_period_end,
     cancel_at_period_end,
     has_future_period,
+    parse_fincode_datetime,
 )
 
 logger = get_logger(__name__)
@@ -46,12 +47,11 @@ def verify_signature(payload: bytes, signature: str | None, secret: str) -> bool
 
 
 def _parse_charged_at(value: Any) -> datetime:
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-    return datetime.now(UTC)
+    # fincode の日時はスラッシュ区切り（"2099/01/01 00:00:00.000"）を含むため、
+    # 期間末と同じ正本パーサ（JST 解釈 → UTC 正規化）を使う。解析不能・欠落時のみ
+    # 受信時刻へフォールバックする。
+    parsed = parse_fincode_datetime(value)
+    return parsed if parsed is not None else datetime.now(UTC)
 
 
 class FincodeWebhookHandler:
@@ -63,7 +63,14 @@ class FincodeWebhookHandler:
         if not verify_signature(payload, signature, self._secret):
             raise UnauthenticatedError(code="invalid_webhook_signature")
 
-        body = json.loads(payload.decode() or "{}")
+        # 署名済みでも本文が壊れている可能性はある。素の JSONDecodeError を 500 に
+        # せず 422 へ翻訳する。再送されても直らない恒久エラーなので 5xx は返さない。
+        try:
+            body = json.loads(payload.decode() or "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            raise UnprocessableError(code="invalid_webhook_payload") from e
+        if not isinstance(body, dict):
+            raise UnprocessableError(code="invalid_webhook_payload")
         event_id = body.get("event_id") or body.get("id") or ""
         event_type = body.get("event") or body.get("type") or "unknown"
 

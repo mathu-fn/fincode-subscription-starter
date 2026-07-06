@@ -6,9 +6,11 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+import pytest
 from sqlalchemy import select
 
 from app.core.enums import PaymentStatus, SubscriptionStatus
+from app.core.exceptions import UnprocessableError
 from app.models.subscription import Subscription
 from app.models.subscription_result import SubscriptionResult
 from app.services.fincode.webhook_handler import FincodeWebhookHandler
@@ -238,6 +240,52 @@ async def test_payment_failed_keeps_cancelled_subscription(
     )
     assert result is not None
     assert result.status == PaymentStatus.FAILED
+
+
+async def test_payment_charged_at_parses_fincode_slash_format(
+    db_session,
+    registered_user: dict[str, Any],
+) -> None:
+    # fincode の日時はスラッシュ区切り（JST）。ISO しか解析できないと受信時刻に
+    # フォールバックし、charged_at が課金処理日時でなくなる。JST 09:00 = UTC 00:00。
+    sub = _make_subscription(
+        registered_user,
+        fincode_subscription_id="sub_pay_charged_at",
+        status=SubscriptionStatus.ACTIVE,
+    )
+    db_session.add(sub)
+    await db_session.commit()
+
+    await _handle(
+        db_session,
+        {
+            "event_id": "evt_pay_charged_at",
+            "event": "subscription.payment.succeeded",
+            "data": {
+                "subscription_id": "sub_pay_charged_at",
+                "payment_id": "pay_charged_at",
+                "amount": "500",
+                "status": "CAPTURED",
+                "process_date": "2026/07/01 09:00:00.000",
+            },
+        },
+    )
+
+    result = await db_session.scalar(
+        select(SubscriptionResult).where(SubscriptionResult.fincode_payment_id == "pay_charged_at")
+    )
+    assert result is not None
+    assert as_utc(result.charged_at) == datetime(2026, 7, 1, 0, 0, tzinfo=UTC)
+
+
+async def test_invalid_json_payload_raises_unprocessable(db_session) -> None:
+    # 署名済みでも本文が JSON でなければ 500 でなく 422（恒久エラー、再送で直らない）。
+    body = b"{not-json"
+    signature = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    with pytest.raises(UnprocessableError):
+        await FincodeWebhookHandler(WEBHOOK_SECRET).handle(
+            payload=body, signature=signature, db=db_session
+        )
 
 
 async def test_payment_webhook_upsert_is_idempotent(
