@@ -35,6 +35,7 @@ from app.models.subscription_result import SubscriptionResult
 from app.models.user import User
 from app.services.audit_logger import AuditLogger
 from app.services.base_manager import BaseManager
+from app.services.fincode.base import FINCODE_TIMEZONE
 from app.services.fincode.client import FincodeClient
 from app.services.fincode.idempotency import new_nonce
 from app.services.fincode.plan_service import FincodePlanService, PlanData
@@ -131,7 +132,9 @@ class SubscriptionManager(BaseManager):
         if card is None or card.deleted_at is not None or card.user_id != user.id:
             raise NotFoundError("Card not found.", code="card_not_found")
 
-        now = datetime.now(UTC)
+        # カードの月境界は fincode（日本のサービス）が課金判定する JST で解釈する。
+        # UTC だと月替わりの最大 9 時間、期限切れカードを有効と誤判定する。
+        now = datetime.now(FINCODE_TIMEZONE)
         # exp_year は 4 桁で保存される。
         if (card.exp_year, card.exp_month) < (now.year, now.month):
             raise UnprocessableError(code="expired_card")
