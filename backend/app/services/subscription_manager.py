@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import SubscriptionStatus
 from app.core.exceptions import (
     ConflictError,
-    ForbiddenError,
     NotFoundError,
     UnprocessableError,
 )
@@ -127,10 +126,10 @@ class SubscriptionManager(BaseManager):
         card_id: int,
     ) -> FincodeCard:
         card = await db.get(FincodeCard, card_id)
-        if card is None or card.deleted_at is not None:
+        # 他ユーザーのカードも「存在しない」扱いに統一する。403 を返すと連番 ID に
+        # 対してカードの存在有無を露呈してしまう（ID 列挙対策）。
+        if card is None or card.deleted_at is not None or card.user_id != user.id:
             raise NotFoundError("Card not found.", code="card_not_found")
-        if card.user_id != user.id:
-            raise ForbiddenError()
 
         now = datetime.now(UTC)
         # exp_year は 4 桁で保存される。

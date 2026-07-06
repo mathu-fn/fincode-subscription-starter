@@ -311,6 +311,30 @@ async def test_plan_fetch_transient_error_returns_503_not_422(
     assert response.json()["detail"]["code"] == "fincode_server_error"
 
 
+async def test_delete_other_users_card_returns_404(
+    auth_client: AsyncClient, fake_fincode: FakeFincodeClient
+) -> None:
+    # 他ユーザーのカードは 403 でなく 404。403 を返すと連番 card_id に対して
+    # カードの存在有無を露呈してしまう（ID 列挙対策）。
+    card = await auth_client.post("/api/subscription/cards", json={"token": "tok_owner"})
+    assert card.status_code == 201, card.text
+    card_id = card.json()["id"]
+
+    other = await auth_client.post(
+        "/api/register",
+        json={"name": "Mallory", "email": "mallory@example.com", "password": "supersecret123"},
+    )
+    assert other.status_code == 201, other.text
+    other_token = other.json()["access_token"]
+
+    response = await auth_client.delete(
+        f"/api/subscription/cards/{card_id}",
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+    assert response.status_code == 404, response.text
+    assert response.json()["detail"]["code"] == "card_not_found"
+
+
 async def test_change_paid_to_free_plan_cancels_with_pay_type_query(
     auth_client: AsyncClient, fake_fincode: FakeFincodeClient
 ) -> None:
