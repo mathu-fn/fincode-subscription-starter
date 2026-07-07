@@ -63,6 +63,36 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /api/auth/google:
+    post:
+      tags: [認証]
+      operationId: googleLogin
+      summary: Google IDトークンでログインしてJWTを発行
+      description: |
+        Google Identity Services のボタンが返す ID トークン（credential）を検証し、
+        `google_sub` をキーにユーザーを find-or-create してアプリの JWT を発行します。
+        検証済みメールアドレスが既存ユーザーと衝突する場合は 409 を返します。
+      security: []
+      x-rateLimit: 5/min
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleLoginRequest'
+      responses:
+        '200':
+          description: ログイン成功（初回はユーザーを新規作成）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/ApplicationError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /api/logout:
     post:
       tags: [認証]
@@ -437,6 +467,14 @@ components:
         password:
           type: string
           format: password
+    GoogleLoginRequest:
+      type: object
+      required: [credential]
+      properties:
+        credential:
+          type: string
+          minLength: 1
+          description: Google Identity Services が返す ID トークン。
     AuthResponse:
       type: object
       required: [access_token, token_type, expires_at, user]

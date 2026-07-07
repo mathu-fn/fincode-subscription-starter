@@ -21,11 +21,14 @@ from testcontainers.postgres import PostgresContainer
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-please-change-very-long-string")
 os.environ.setdefault("FINCODE_WEBHOOK_SECRET", "test-webhook-secret")
 os.environ.setdefault("RATE_LIMIT_STORAGE_URI", "memory://")
+os.environ.setdefault("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
 
 
 @pytest.fixture(scope="session")
 def postgres_container() -> Iterator[PostgresContainer]:
-    container = PostgresContainer("postgres:16-alpine", username="app", password="change-me", dbname="subscription_app")
+    container = PostgresContainer(
+        "postgres:16-alpine", username="app", password="change-me", dbname="subscription_app"
+    )
     container.start()
     try:
         yield container
@@ -74,7 +77,9 @@ def applied_migrations(postgres_container: PostgresContainer) -> str:
 
     cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", sync_url)
-    cfg.set_main_option("script_location", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "alembic")))
+    cfg.set_main_option(
+        "script_location", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "alembic"))
+    )
     command.upgrade(cfg, "head")
     return async_url
 
@@ -92,7 +97,9 @@ async def db_engine(applied_migrations: str) -> AsyncIterator[Any]:
 async def db_session(app_instance: Any, db_engine: Any) -> AsyncIterator[AsyncSession]:
     # Depend on app_instance so the per-test truncate has already run before
     # the test reads the DB.
-    Session = async_sessionmaker(db_engine, expire_on_commit=False, autoflush=False, class_=AsyncSession)
+    Session = async_sessionmaker(
+        db_engine, expire_on_commit=False, autoflush=False, class_=AsyncSession
+    )
     async with Session() as session:
         yield session
         await session.rollback()

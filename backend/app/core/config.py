@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
+    # Google ID トークンの aud 検証に使う OAuth 2.0 クライアント ID。
+    # フロントエンドの VITE_GOOGLE_CLIENT_ID と同一値でなければ全ログインが 401 になる。
+    google_client_id: str = ""
+
     fincode_api_key: str = ""
     fincode_public_key: str = ""
     fincode_base_url: str = "https://api.test.fincode.jp"
@@ -74,6 +78,8 @@ class Settings(BaseSettings):
             raise ValueError("JWT_SECRET_KEY must be changed in production.")
         if self.fincode_webhook_secret == "change-me":
             raise ValueError("FINCODE_WEBHOOK_SECRET must be changed in production.")
+        if not self.google_client_id:
+            raise ValueError("GOOGLE_CLIENT_ID must be set in production.")
         return self
 
 
