@@ -8,9 +8,9 @@ const cardClass = "border border-sky-200 bg-white p-6 shadow-sm shadow-sky-100";
 
 const features: Array<{ title: string; description: string }> = [
   {
-    title: "ユーザー登録 / JWT 認証",
+    title: "Google 認証 / JWT",
     description:
-      "pwdlib (argon2) によるパスワードハッシュと JWT Bearer。/api/register と /api/login を最小構成で提供します。"
+      "Google Identity Services の ID トークンをバックエンドで検証し、自前 JWT を発行。パスワードを保持しない構成を /api/auth/google の最小実装で提供します。"
   },
   {
     title: "カードトークン化",
@@ -59,7 +59,7 @@ const stack: Array<[string, string]> = [
   ["バックエンド", "FastAPI + Python 3.11+ (uv)"],
   ["データベース", "PostgreSQL 16+"],
   ["ORM / マイグレーション", "SQLAlchemy 2.x async + Alembic"],
-  ["認証", "JWT Bearer + pwdlib (argon2)"],
+  ["認証", "Google Identity Services + JWT Bearer"],
   ["決済", "fincode 定期課金"],
   ["テスト", "pytest + testcontainers + Vitest"]
 ];
@@ -98,11 +98,8 @@ export function LandingPage() {
           React + FastAPI で fincode の定期課金を実装する OSS リファレンスです。カードのトークン化、サブスクリプションの登録・変更・解約、Webhook の冪等処理、監査ログまで、そのまま自社サービスに取り込める形で提供します。
         </p>
         <div className="flex flex-wrap gap-3">
-          <Link to="/register" className={primaryBtn}>
-            デモを試す（新規登録）
-          </Link>
-          <Link to="/login" className={secondaryBtn}>
-            ログイン
+          <Link to="/login" className={primaryBtn}>
+            デモを試す（Google でログイン）
           </Link>
           <a
             href={GITHUB_URL}
@@ -216,12 +213,12 @@ FincodeHttpClient → fincode API`}
           <div className="max-w-2xl">
             <h2 className="text-2xl font-bold text-sky-950">まずはローカルで触ってみる。</h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              新規登録するとデモのダッシュボードに入り、カード追加 → プラン契約 → プラン変更 → 履歴確認まで一通り試せます。fincode のテストカード番号で動作確認できます。
+              Google アカウントでログインするとデモのダッシュボードに入り、カード追加 → プラン契約 → プラン変更 → 履歴確認まで一通り試せます。fincode のテストカード番号で動作確認できます。
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link to="/register" className={primaryBtn}>
-              新規登録
+            <Link to="/login" className={primaryBtn}>
+              Google でログイン
             </Link>
             <a
               href={GITHUB_URL}
