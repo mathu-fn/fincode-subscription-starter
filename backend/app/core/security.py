@@ -2,25 +2,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
-from pwdlib import PasswordHash
-from pwdlib.exceptions import UnknownHashError
 
 from app.core.config import get_settings
-
-_password_hash = PasswordHash.recommended()
-
-
-def hash_password(plain: str) -> str:
-    return _password_hash.hash(plain)
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    # ミスマッチ・不正な argon2 ハッシュは pwdlib が False を返す。例外になるのは
-    # ハッシュ形式自体を識別できない場合のみで、これも認証失敗として扱う。
-    try:
-        return _password_hash.verify(plain, hashed)
-    except UnknownHashError:
-        return False
 
 
 def create_access_token(

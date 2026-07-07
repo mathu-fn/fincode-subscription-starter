@@ -1,52 +1,17 @@
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Request
 
 from app.api.deps import AuditLoggerDep, CurrentUserDep, SessionDep
 from app.core.rate_limit import limiter
 from app.schemas.auth import (
     AuthResponse,
     GoogleLoginRequest,
-    LoginRequest,
     MessageResponse,
-    RegisterRequest,
     SessionStatusResponse,
     UserOut,
 )
 from app.services import auth_service
 
 router = APIRouter(tags=["auth"])
-
-
-@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-@limiter.limit("5/minute")
-async def register(
-    request: Request,
-    payload: RegisterRequest,
-    db: SessionDep,
-    audit: AuditLoggerDep,
-) -> AuthResponse:
-    user = await auth_service.register(db, payload)
-    await audit.record(
-        db,
-        user_id=user.id,
-        event="auth.register",
-        auditable_type="user",
-        auditable_id=user.id,
-        after={"email": user.email, "name": user.name},
-    )
-    await db.commit()
-    await db.refresh(user)
-    return auth_service.issue_token(user)
-
-
-@router.post("/login", response_model=AuthResponse)
-@limiter.limit("5/minute")
-async def login(
-    request: Request,
-    payload: LoginRequest,
-    db: SessionDep,
-) -> AuthResponse:
-    user = await auth_service.authenticate(db, payload)
-    return auth_service.issue_token(user)
 
 
 @router.post("/auth/google", response_model=AuthResponse)

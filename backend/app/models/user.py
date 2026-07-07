@@ -14,5 +14,4 @@ class User(Base, TimestampMixin):
     google_sub: Mapped[str | None] = mapped_column(
         String(255), unique=True, index=True, nullable=True
     )
-    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)

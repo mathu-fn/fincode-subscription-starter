@@ -14,7 +14,6 @@ dependencies = [
     "pydantic>=2.7.0,<3.0.0",
     "pydantic-settings>=2.3.0,<3.0.0",
     "pyjwt[crypto]>=2.9.0,<3.0.0",
-    "pwdlib[argon2]>=0.2.0,<0.4.0",
     "google-auth[requests]>=2.35.0,<3.0.0",
     "slowapi>=0.1.9,<0.2.0",
     "httpx>=0.28.1,<0.29.0",

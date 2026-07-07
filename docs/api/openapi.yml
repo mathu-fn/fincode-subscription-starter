@@ -17,52 +17,6 @@ tags:
   - name: カード
   - name: Webhook
 paths:
-  /api/register:
-    post:
-      tags: [認証]
-      operationId: register
-      summary: ユーザー登録
-      security: []
-      x-rateLimit: 5/min
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegisterRequest'
-      responses:
-        '201':
-          description: 登録成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-  /api/login:
-    post:
-      tags: [認証]
-      operationId: login
-      summary: ログインしてJWTを発行
-      security: []
-      x-rateLimit: 5/min
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LoginRequest'
-      responses:
-        '200':
-          description: ログイン成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '422':
-          $ref: '#/components/responses/ValidationError'
   /api/auth/google:
     post:
       tags: [認証]
@@ -407,7 +361,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: "`POST /api/login` で返される JWT。"
+      description: "`POST /api/auth/google` で返される JWT。"
   parameters:
     Page:
       name: page
@@ -444,29 +398,6 @@ components:
           schema:
             $ref: '#/components/schemas/ApplicationError'
   schemas:
-    RegisterRequest:
-      type: object
-      required: [name, email, password]
-      properties:
-        name:
-          type: string
-          maxLength: 255
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-          minLength: 8
-    LoginRequest:
-      type: object
-      required: [email, password]
-      properties:
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-          format: password
     GoogleLoginRequest:
       type: object
       required: [credential]

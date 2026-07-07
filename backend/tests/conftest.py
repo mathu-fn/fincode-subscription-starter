@@ -136,16 +136,18 @@ async def client(app_instance) -> AsyncIterator[AsyncClient]:
 
 
 @pytest_asyncio.fixture()
-async def registered_user(client: AsyncClient) -> dict[str, Any]:
-    payload = {
-        "name": "Test User",
-        "email": "alice@example.com",
-        "password": "supersecret123",
-    }
-    response = await client.post("/api/register", json=payload)
-    assert response.status_code == 201, response.text
-    data = response.json()
-    return {"token": data["access_token"], "user": data["user"], "password": payload["password"]}
+async def registered_user(db_session: AsyncSession) -> dict[str, Any]:
+    # ログイン手段は Google 認証のみなので、テスト用ユーザーは API を経由せず
+    # DB へ直接作成し、トークンも自前 JWT を直接発行する。
+    from app.core.security import create_access_token
+    from app.models.user import User
+
+    user = User(google_sub="fixture-google-sub", email="alice@example.com", name="Test User")
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    token, _ = create_access_token(user.id)
+    return {"token": token, "user": {"id": user.id, "email": user.email, "name": user.name}}
 
 
 @pytest_asyncio.fixture()

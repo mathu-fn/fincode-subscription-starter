@@ -8,94 +8,18 @@ from httpx import AsyncClient
 pytestmark = pytest.mark.asyncio
 
 
-async def test_register_returns_token_and_user(client: AsyncClient) -> None:
-    response = await client.post(
+async def test_password_login_endpoints_are_gone(client: AsyncClient) -> None:
+    # メール+パスワード認証は廃止済み。ルート自体が存在しないことを固定する。
+    register = await client.post(
         "/api/register",
         json={"name": "Bob", "email": "bob@example.com", "password": "supersecret123"},
     )
-
-    assert response.status_code == 201, response.text
-    body = response.json()
-    assert body["token_type"] == "bearer"
-    assert body["access_token"]
-    assert body["user"]["email"] == "bob@example.com"
-    assert body["user"]["name"] == "Bob"
-
-
-async def test_register_duplicate_email_returns_409(client: AsyncClient) -> None:
-    payload = {"name": "Bob", "email": "dup@example.com", "password": "supersecret123"}
-    await client.post("/api/register", json=payload)
-    response = await client.post("/api/register", json=payload)
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "email_already_registered"
-
-
-async def test_register_validation_error(client: AsyncClient) -> None:
-    response = await client.post(
-        "/api/register",
-        json={"name": "", "email": "not-an-email", "password": "short"},
-    )
-    assert response.status_code == 422
-    body = response.json()
-    assert isinstance(body["detail"], list)
-
-
-async def test_login_success(client: AsyncClient, registered_user: dict[str, Any]) -> None:
-    response = await client.post(
-        "/api/login",
-        json={"email": registered_user["user"]["email"], "password": registered_user["password"]},
-    )
-    assert response.status_code == 200
-    assert response.json()["access_token"]
-
-
-async def test_login_wrong_password(client: AsyncClient, registered_user: dict[str, Any]) -> None:
-    response = await client.post(
-        "/api/login",
-        json={"email": registered_user["user"]["email"], "password": "wrong-password"},
-    )
-    assert response.status_code == 401
-    assert response.json()["detail"]["code"] == "invalid_credentials"
-
-
-async def test_login_unknown_email_returns_same_error(client: AsyncClient) -> None:
-    # 未登録メールでも誤パスワードと同じ 401 / invalid_credentials を返す
-    # （エラーコードからの列挙を防ぐ。タイミング差緩和の挙動も担保）。
-    response = await client.post(
-        "/api/login",
-        json={"email": "nobody@example.com", "password": "whatever-password"},
-    )
-    assert response.status_code == 401
-    assert response.json()["detail"]["code"] == "invalid_credentials"
-
-
-async def test_email_is_case_insensitive(client: AsyncClient) -> None:
-    register = await client.post(
-        "/api/register",
-        json={"name": "Carol", "email": "Carol@Example.com", "password": "supersecret123"},
-    )
-    assert register.status_code == 201, register.text
-    # 保存時に小文字へ正規化される。
-    assert register.json()["user"]["email"] == "carol@example.com"
-
-    # 大文字混じりでログインしても一致する。
     login = await client.post(
         "/api/login",
-        json={"email": "CAROL@EXAMPLE.COM", "password": "supersecret123"},
+        json={"email": "bob@example.com", "password": "supersecret123"},
     )
-    assert login.status_code == 200, login.text
-    assert login.json()["access_token"]
-
-
-async def test_register_duplicate_email_case_insensitive_returns_409(
-    client: AsyncClient,
-) -> None:
-    base = {"name": "Dave", "password": "supersecret123"}
-    first = await client.post("/api/register", json={**base, "email": "dave@example.com"})
-    assert first.status_code == 201, first.text
-    second = await client.post("/api/register", json={**base, "email": "Dave@Example.com"})
-    assert second.status_code == 409
-    assert second.json()["detail"]["code"] == "email_already_registered"
+    assert register.status_code == 404
+    assert login.status_code == 404
 
 
 async def test_token_missing_required_claims_rejected(client: AsyncClient) -> None:
@@ -198,7 +122,7 @@ async def test_google_login_is_idempotent_for_same_sub(
 async def test_google_login_email_conflict_returns_409(
     client: AsyncClient, registered_user: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # パスワード時代の既存ユーザーと同じメールの Google アカウントは紐付けない。
+    # 既存ユーザーと同じメールでも sub が異なる Google アカウントは紐付けない。
     _stub_google_identity(monkeypatch, email=registered_user["user"]["email"])
     response = await client.post("/api/auth/google", json={"credential": "fake-credential"})
 
