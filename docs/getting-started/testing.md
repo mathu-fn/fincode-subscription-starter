@@ -40,7 +40,7 @@ PostgreSQL 固有機能（JSONB、partial unique index）を使うため、SQLit
 
 ## 認証付きリクエスト
 
-`auth_client` フィクスチャを使うと、登録済みユーザーで認証ヘッダー付きの `httpx.AsyncClient` が手に入ります。新規登録は `registered_user` フィクスチャが `POST /api/register` を呼びます。
+`auth_client` フィクスチャを使うと、登録済みユーザーで認証ヘッダー付きの `httpx.AsyncClient` が手に入ります。`registered_user` フィクスチャがユーザー行を DB に直接作成し、JWT を直接発行します（ログインは Google 認証のみのため、API 経由では作成しません）。
 
 ## fincode をモックする
 

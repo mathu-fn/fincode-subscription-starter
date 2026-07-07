@@ -8,6 +8,7 @@
 - Node.js 22+
 - Docker Desktop（PostgreSQL 起動と統合テストの testcontainers で必要）
 - fincode テストアカウント（テスト API キーとプランを作成しておく）
+- Google OAuth 2.0 クライアント ID（ログインに使用）
 
 ## 初回セットアップ
 
@@ -23,6 +24,13 @@ cp .env.example .env
 FINCODE_API_KEY=m_test_xxxxxxxxxxxxxxxxxxxxxxx
 FINCODE_PUBLIC_KEY=p_test_xxxxxxxxxxxxxxxxxxxxxxx
 FINCODE_WEBHOOK_SECRET=（fincode 管理画面で発行した署名キー）
+```
+
+続いて Google ログイン用のクライアント ID を設定します。[Google Cloud Console](https://console.cloud.google.com/apis/credentials) で「OAuth クライアント ID（ウェブ アプリケーション）」を作成し、「承認済みの JavaScript 生成元」に `http://localhost:5173` を登録してください（リダイレクト URI は不要）。
+
+```env
+GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+VITE_GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com   # バックエンドと同一値
 ```
 
 ## 起動
@@ -64,7 +72,7 @@ postgres / backend / frontend がすべて起動します。
 
 ## 画面の流れ
 
-1. **新規登録** — `/register` で名前・メール・パスワード（8文字以上）を入力 → 登録完了で自動ログイン。
+1. **ログイン** — `/login` の「Google でログイン」ボタンで Google アカウントを選択。初回は自動でアカウントが作成されます。
 2. **カード追加** — ナビの「カード」で fincode.js のフォームに PAN / 有効期限 / CVC を入力（PAN/CVC はバックエンドに送られません）。fincode のテストカード番号を使ってください。
 3. **プラン契約** — ナビの「プラン」→ 支払いカードを選択 → fincode 管理画面で作成済みのプランから選んで契約。
 4. **契約の確認・解約** — ナビの「契約」で詳細を確認、「解約する」で次回以降の請求を停止。有料契約は `current_period_end` まで利用できます。
@@ -126,6 +134,8 @@ Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/api/webhooks/fincode'
 | `ModuleNotFoundError` | `cd backend && uv sync` 未実行 |
 | ブラウザで CORS エラー | `.env` の `CORS_ORIGINS` と `VITE_API_BASE_URL` が一致しているか |
 | ログイン後すぐ 401 | `JWT_SECRET_KEY` を変えたら既存トークンは無効。ブラウザの localStorage をクリアして再ログイン |
+| Google ログインが 401 `invalid_google_token` | `GOOGLE_CLIENT_ID`（バックエンド）と `VITE_GOOGLE_CLIENT_ID`（フロント）が同一値か確認 |
+| Google ボタンが表示されない | Google Cloud Console の「承認済みの JavaScript 生成元」に `http://localhost:5173` が登録されているか確認 |
 | fincode の API キーが unauthorized | テスト環境キー（`m_test_*` / `p_test_*`）と `https://api.test.fincode.jp` の組み合わせか確認 |
 | pytest で testcontainers が起動しない | Docker Desktop が起動しているか確認 |
 

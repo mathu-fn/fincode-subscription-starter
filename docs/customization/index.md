@@ -9,7 +9,7 @@
 | プロダクト識別子 | `README*`, `pyproject.toml`, `package.json` | package 名、repository、homepage、サポートリンクを変更 |
 | 実行時設定 | `.env.example`, `app/core/config.py` | URL、secret、許可する origin のプレースホルダを置き換える |
 | ブランディング | `frontend/src/` | ロゴ、色、文言、画面レイアウト |
-| 認証ポリシー | `app/core/security.py`, `app/api/deps.py` | JWT の有効期限、パスワードポリシー、トークン無効化の方針 |
+| 認証ポリシー | `app/core/security.py`, `app/services/google_identity.py`, `app/api/deps.py` | JWT の有効期限、Google クライアント ID、トークン無効化の方針 |
 | 法務文言 | frontend の legal ページ | 利用規約、プライバシーポリシー、特商法表記 |
 | デプロイ | インフラ関連ファイル | ドメイン、TLS、プロセスマネージャ、secret store |
 

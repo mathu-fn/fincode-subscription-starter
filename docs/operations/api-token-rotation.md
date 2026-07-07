@@ -1,6 +1,6 @@
 # APIトークン運用
 
-API は `POST /api/login` で発行する JWT Bearer token を使います。
+API は `POST /api/auth/google`（Google ログイン）で発行する JWT Bearer token を使います。
 
 ## 既定モデル
 

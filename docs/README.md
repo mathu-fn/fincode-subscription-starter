@@ -52,7 +52,6 @@
 | [operations/configuration.md](./operations/configuration.md) | 環境変数リファレンス（`.env` の全キーと既定値・用途） |
 | [operations/deployment.md](./operations/deployment.md) | 本番チェックリスト、Uvicorn、Nginx、マイグレーション、Webhook 受信 |
 | [operations/api-token-rotation.md](./operations/api-token-rotation.md) | JWT寿命、更新・ローテーション、長期稼働クライアントの注意点 |
-| [operations/password-reset.md](./operations/password-reset.md) | パスワードリセットの設計メモと復元方針 |
 
 ## セキュリティ
 

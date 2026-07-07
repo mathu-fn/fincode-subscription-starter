@@ -24,13 +24,16 @@ cp .env.example .env
 
 > Docker Compose で立てた PostgreSQL の認証情報（`app` / `change-me`）と一致させてください。本番では secret store から渡します。
 
-## 認証 (JWT)
+## 認証 (Google ログイン + JWT)
 
 | キー | 既定値 | 用途 |
 | --- | --- | --- |
+| `GOOGLE_CLIENT_ID` | （空） | Google OAuth 2.0 クライアント ID。GIS が発行する ID トークンの `aud` 検証に使う。本番では必須。フロントの `VITE_GOOGLE_CLIENT_ID` と**同一値**にする（食い違うと全ログインが 401 になる） |
 | `JWT_SECRET_KEY` | `change-this-in-production` | JWT 署名鍵。本番では 32 バイト以上のランダム値を必須 |
 | `JWT_ALGORITHM` | `HS256` | 署名アルゴリズム |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | アクセストークン有効期限（分） |
+
+`GOOGLE_CLIENT_ID` は [Google Cloud Console](https://console.cloud.google.com/apis/credentials) で「OAuth クライアント ID（ウェブ アプリケーション）」を作成して取得します。「承認済みの JavaScript 生成元」にフロントエンドのオリジン（ローカルなら `http://localhost:5173`）を登録してください。リダイレクト URI は不要です（GIS のボタンフローを使用）。
 
 `JWT_SECRET_KEY` を変更すると既存トークンは全て無効になります（複数検証鍵をサポートしていないため）。運用方針は [api-token-rotation.md](./api-token-rotation.md) を参照。
 
@@ -66,6 +69,7 @@ cp .env.example .env
 | キー | 既定値 | 用途 |
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | `http://localhost:8000` | フロントエンドが呼び出すバックエンドのベース URL |
+| `VITE_GOOGLE_CLIENT_ID` | （空） | GIS のログインボタンに使う Google OAuth 2.0 クライアント ID。バックエンドの `GOOGLE_CLIENT_ID` と**同一値** |
 | `VITE_FINCODE_MODE` | （空 = ライブ） | `mock` にするとフロントは fincode.js を読み込まず、カード登録フォームがテストトークン直接入力に切り替わる。バックエンドの `FINCODE_MODE` と揃える |
 | `VITE_FINCODE_PUBLIC_KEY` | （空） | ブラウザ上の fincode.js で使う公開鍵。`FINCODE_PUBLIC_KEY` と同じ値。`VITE_FINCODE_MODE=mock` のときは不要 |
 | `VITE_FINCODE_SDK_URL` | `https://js.test.fincode.jp/v1/fincode.js` | 読み込む fincode.js SDK の URL。本番は `https://js.fincode.jp/v1/fincode.js` |
@@ -78,12 +82,14 @@ cp .env.example .env
 APP_ENV=local
 DATABASE_URL=postgresql+asyncpg://app:change-me@127.0.0.1:5432/subscription_app
 JWT_SECRET_KEY=change-this-in-production-please-use-32+-random-bytes
+GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
 FINCODE_API_KEY=m_test_xxxxxxxxxxxxxxxxxxxxxxx
 FINCODE_PUBLIC_KEY=p_test_xxxxxxxxxxxxxxxxxxxxxxx
 FINCODE_BASE_URL=https://api.test.fincode.jp
 FINCODE_WEBHOOK_SECRET=local-webhook-secret
 CORS_ORIGINS=http://localhost:5173
 VITE_API_BASE_URL=http://localhost:8000
+VITE_GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
 VITE_FINCODE_PUBLIC_KEY=p_test_xxxxxxxxxxxxxxxxxxxxxxx
 VITE_FINCODE_SDK_URL=https://js.test.fincode.jp/v1/fincode.js
 ```
@@ -96,6 +102,7 @@ APP_URL=https://app.example.com
 API_URL=https://api.example.com
 DATABASE_URL=postgresql+asyncpg://app:<strong-password>@db.internal:5432/subscription_app
 JWT_SECRET_KEY=<32+ bytes of randomness from secret store>
+GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 FINCODE_MODE=live
 FINCODE_API_KEY=m_prod_xxxxxxxxxxxxxxxxxxxxxxx
@@ -105,6 +112,7 @@ FINCODE_WEBHOOK_SECRET=<from fincode dashboard>
 CORS_ORIGINS=https://app.example.com
 RATE_LIMIT_STORAGE_URI=redis://redis.internal:6379/0
 VITE_API_BASE_URL=https://api.example.com
+VITE_GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
 VITE_FINCODE_PUBLIC_KEY=p_prod_xxxxxxxxxxxxxxxxxxxxxxx
 VITE_FINCODE_SDK_URL=https://js.fincode.jp/v1/fincode.js
 ```
