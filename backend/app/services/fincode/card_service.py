@@ -1,3 +1,10 @@
+"""fincode カードサービス。
+
+顧客配下のカード作成・削除の薄いラッパー。カード作成の Idempotency-Key は
+トークンのフィンガープリントから決定論的に生成し、同一トークンの再送で
+重複登録を作らない。
+"""
+
 from __future__ import annotations
 
 from typing import Any

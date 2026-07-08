@@ -43,8 +43,17 @@ async def login(
     request: Request,
     payload: LoginRequest,
     db: SessionDep,
+    audit: AuditLoggerDep,
 ) -> AuthResponse:
     user = await auth_service.authenticate(db, payload)
+    await audit.record(
+        db,
+        user_id=user.id,
+        event="auth.login",
+        auditable_type="user",
+        auditable_id=user.id,
+    )
+    await db.commit()
     return auth_service.issue_token(user)
 
 

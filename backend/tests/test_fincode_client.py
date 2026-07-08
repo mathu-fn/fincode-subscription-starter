@@ -39,7 +39,9 @@ async def test_post_returns_json_and_sends_idempotency_key() -> None:
 
     client = make_client(handler)
     try:
-        result = await client.request("POST", "/v1/customers", json={"name": "x"}, idempotency_key="key-1")
+        result = await client.request(
+            "POST", "/v1/customers", json={"name": "x"}, idempotency_key="key-1"
+        )
         assert result == {"id": "cus_1"}
         assert captured["idem"] == "key-1"
         assert captured["auth"] == "Bearer m_test_dummy"
@@ -107,6 +109,24 @@ async def test_4xx_raises_api_error_without_retry() -> None:
         with pytest.raises(FincodeApiError):
             await client.request("POST", "/v1/customers", json={})
         assert calls["n"] == 1
+    finally:
+        await client.aclose()
+
+
+async def test_connect_error_retries_then_raises_server_error() -> None:
+    # 接続失敗は一時的失敗。素の FincodeApiError（4xx 相当＝恒久扱い）にすると
+    # plan_service.fetch が 422 plan_unavailable へ誤翻訳するため、503 系で raise する。
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        raise httpx.ConnectError("connection refused")
+
+    client = make_client(handler)
+    try:
+        with pytest.raises(FincodeServerError):
+            await client.request("GET", "/v1/plans")
+        assert calls["n"] == 3  # initial + 2 retries
     finally:
         await client.aclose()
 

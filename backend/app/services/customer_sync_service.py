@@ -7,6 +7,7 @@ fincode 顧客 ID は遅延作成される — 初回のカード登録または
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
@@ -27,7 +28,9 @@ class CustomerSyncService:
         self._fincode = FincodeCustomerService(client)
 
     async def ensure(self, db: AsyncSession, user: User) -> FincodeCustomer:
-        existing = await db.scalar(select(FincodeCustomer).where(FincodeCustomer.user_id == user.id))
+        existing = await db.scalar(
+            select(FincodeCustomer).where(FincodeCustomer.user_id == user.id)
+        )
         if existing is not None:
             return existing
 
@@ -56,6 +59,20 @@ class CustomerSyncService:
             user_id=user.id,
             fincode_customer_id=customer_id,
         )
-        db.add(customer)
-        await db.flush()
+        # 並行する初回作成（初回カード登録と初回契約の同時実行など）は
+        # ``fincode_customers.user_id`` の unique 制約で片方が弾かれる。savepoint に
+        # 閉じ込めて INSERT し、負けた側は勝った側の行を読み直して返す。素の
+        # IntegrityError を伝播させると 500 になり、``db.rollback()`` では呼び出し元が
+        # 同一セッションで積んだ変更まで巻き添えにするため、どちらも採らない。
+        try:
+            async with db.begin_nested():
+                db.add(customer)
+                await db.flush()
+        except IntegrityError:
+            winner = await db.scalar(
+                select(FincodeCustomer).where(FincodeCustomer.user_id == user.id)
+            )
+            if winner is None:
+                raise
+            return winner
         return customer

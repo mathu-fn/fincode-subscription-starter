@@ -146,3 +146,25 @@ async def test_logout_writes_audit_log(auth_client: AsyncClient, db_session) -> 
         .all()
     )
     assert len(rows) >= 1
+
+
+async def test_login_writes_audit_log(
+    client: AsyncClient, registered_user: dict[str, Any], db_session
+) -> None:
+    # register / logout と同様に、ログイン成功も監査対象（成功した業務操作）。
+    from sqlalchemy import select
+
+    from app.models.audit_log import AuditLog
+
+    response = await client.post(
+        "/api/login",
+        json={"email": "alice@example.com", "password": registered_user["password"]},
+    )
+    assert response.status_code == 200
+
+    rows = (
+        (await db_session.execute(select(AuditLog).where(AuditLog.event == "auth.login")))
+        .scalars()
+        .all()
+    )
+    assert len(rows) >= 1
