@@ -69,7 +69,8 @@ async def test_logout_writes_audit_log(auth_client: AsyncClient, db_session) -> 
         .scalars()
         .all()
     )
-    assert len(rows) >= 1
+    # ちょうど 1 件（二重記録を見逃さない）。
+    assert len(rows) == 1
 
 
 # ---- Google ログイン ------------------------------------------------------
@@ -243,6 +244,22 @@ async def test_verify_id_token_rejects_unverified_email(
     with pytest.raises(UnauthenticatedError) as exc_info:
         await verify_id_token("fake-credential")
     assert exc_info.value.code == "google_email_not_verified"
+
+
+async def test_verify_id_token_rejects_missing_sub_or_email(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.exceptions import UnauthenticatedError
+    from app.services.google_identity import verify_id_token
+
+    for claims in (
+        {"email": "alice@example.com", "email_verified": True},  # sub 欠落
+        {"sub": "sub-123", "email_verified": True},  # email 欠落
+    ):
+        _stub_google_claims(monkeypatch, claims)
+        with pytest.raises(UnauthenticatedError) as exc_info:
+            await verify_id_token("fake-credential")
+        assert exc_info.value.code == "invalid_google_token"
 
 
 async def test_verify_id_token_translates_verification_failure(
