@@ -7,6 +7,7 @@ fincode 顧客 ID は遅延作成される — 初回のカード登録または
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
@@ -27,7 +28,9 @@ class CustomerSyncService:
         self._fincode = FincodeCustomerService(client)
 
     async def ensure(self, db: AsyncSession, user: User) -> FincodeCustomer:
-        existing = await db.scalar(select(FincodeCustomer).where(FincodeCustomer.user_id == user.id))
+        existing = await db.scalar(
+            select(FincodeCustomer).where(FincodeCustomer.user_id == user.id)
+        )
         if existing is not None:
             return existing
 
@@ -52,10 +55,25 @@ class CustomerSyncService:
         except FincodeApiError:
             customer_id = f"local_user_{user.id}"
 
+        # rollback はセッション内の全オブジェクトを expire するため、以降の属性アクセスが
+        # 暗黙 IO にならないよう ID を先に退避しておく。
+        user_id = user.id
         customer = FincodeCustomer(
-            user_id=user.id,
+            user_id=user_id,
             fincode_customer_id=customer_id,
         )
         db.add(customer)
-        await db.flush()
+        try:
+            await db.flush()
+        except IntegrityError:
+            # 事前 SELECT を通り抜けた並行 INSERT（TOCTOU）。fincode_customers.user_id は
+            # unique なので、勝った側の行を読み直して返す。fincode 側は決定論的な顧客 ID +
+            # 固定 Idempotency-Key のため二重作成にはならない。
+            await db.rollback()
+            winner: FincodeCustomer | None = await db.scalar(
+                select(FincodeCustomer).where(FincodeCustomer.user_id == user_id)
+            )
+            if winner is None:
+                raise
+            return winner
         return customer
