@@ -160,7 +160,15 @@ paths:
         '409':
           $ref: '#/components/responses/ApplicationError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/ApplicationError'
+        '502':
+          $ref: '#/components/responses/ApplicationError'
+        '503':
+          $ref: '#/components/responses/ApplicationError'
+        '504':
+          $ref: '#/components/responses/ApplicationError'
     patch:
       tags: [サブスクリプション]
       operationId: changeSubscriptionPlan
@@ -199,9 +207,17 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/ApplicationError'
+        '409':
+          $ref: '#/components/responses/ApplicationError'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/ApplicationError'
         '502':
+          $ref: '#/components/responses/ApplicationError'
+        '503':
+          $ref: '#/components/responses/ApplicationError'
+        '504':
           $ref: '#/components/responses/ApplicationError'
     delete:
       tags: [サブスクリプション]
@@ -226,6 +242,14 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
+          $ref: '#/components/responses/ApplicationError'
+        '429':
+          $ref: '#/components/responses/ApplicationError'
+        '502':
+          $ref: '#/components/responses/ApplicationError'
+        '503':
+          $ref: '#/components/responses/ApplicationError'
+        '504':
           $ref: '#/components/responses/ApplicationError'
   /api/subscription/history:
     get:
@@ -264,6 +288,14 @@ paths:
                   $ref: '#/components/schemas/Plan'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/ApplicationError'
+        '502':
+          $ref: '#/components/responses/ApplicationError'
+        '503':
+          $ref: '#/components/responses/ApplicationError'
+        '504':
+          $ref: '#/components/responses/ApplicationError'
   /api/subscription/cards:
     get:
       tags: [カード]
@@ -306,6 +338,14 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/ApplicationError'
+        '502':
+          $ref: '#/components/responses/ApplicationError'
+        '503':
+          $ref: '#/components/responses/ApplicationError'
+        '504':
+          $ref: '#/components/responses/ApplicationError'
   /api/subscription/cards/{card_id}:
     delete:
       tags: [カード]
@@ -328,6 +368,14 @@ paths:
         '404':
           $ref: '#/components/responses/ApplicationError'
         '409':
+          $ref: '#/components/responses/ApplicationError'
+        '429':
+          $ref: '#/components/responses/ApplicationError'
+        '502':
+          $ref: '#/components/responses/ApplicationError'
+        '503':
+          $ref: '#/components/responses/ApplicationError'
+        '504':
           $ref: '#/components/responses/ApplicationError'
   /api/webhooks/fincode:
     post:
@@ -357,7 +405,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
-          description: ペイロード不備（event_id 欠落など。code=invalid_webhook_payload）
+          description: ペイロード不備（JSON 破損・event_id 欠落など。code=invalid_webhook_payload）
           content:
             application/json:
               schema:
@@ -404,6 +452,17 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ApplicationError'
+    UnprocessableEntity:
+      description: |
+        処理不能。リクエスト形式の誤り（Pydantic バリデーション、`detail` は配列）と
+        業務ルール違反（`card_required` / `expired_card` / `plan_unavailable` 等、
+        `detail` はオブジェクト）の両方がこのステータスで返る。
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/ValidationError'
+              - $ref: '#/components/schemas/ApplicationError'
   schemas:
     GoogleLoginRequest:
       type: object

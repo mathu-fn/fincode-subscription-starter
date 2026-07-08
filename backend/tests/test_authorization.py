@@ -1,8 +1,9 @@
 """認可境界（IDOR）: 他ユーザーのリソースへのアクセス拒否。
 
-ForbiddenError の「形」は test_error_contract.py が固定するが、ここでは
 実際に 2 人目のユーザーを作り、他人のカードを削除・契約に使えないことを
-API 境界で検証する（ガードを消すとここが落ちる）。
+API 境界で検証する（ガードを消すとここが落ちる）。応答は 403 ではなく
+404 (card_not_found) — 403 を返すと連番 ID に対してカードの存在有無を
+露呈してしまうため、「存在しない」扱いに統一している（ID 列挙対策）。
 """
 
 from __future__ import annotations
@@ -45,8 +46,8 @@ async def test_cannot_delete_other_users_card(
     response = await auth_client.delete(
         f"/api/subscription/cards/{card_id}", headers=second_user_headers
     )
-    assert response.status_code == 403, response.text
-    assert response.json()["detail"]["code"] == "forbidden"
+    assert response.status_code == 404, response.text
+    assert response.json()["detail"]["code"] == "card_not_found"
 
     # 所有者のカード一覧には残っている（削除されていない）。
     listed = await auth_client.get("/api/subscription/cards")
@@ -67,7 +68,7 @@ async def test_cannot_subscribe_with_other_users_card(
         json={"fincode_plan_id": "plan_test_pro", "card_id": card_id},
         headers=second_user_headers,
     )
-    assert response.status_code == 403, response.text
-    assert response.json()["detail"]["code"] == "forbidden"
+    assert response.status_code == 404, response.text
+    assert response.json()["detail"]["code"] == "card_not_found"
     # fincode の契約作成には到達していない。
     assert ("POST", "/v1/subscriptions") not in fake_fincode.calls[len(calls_before) :]

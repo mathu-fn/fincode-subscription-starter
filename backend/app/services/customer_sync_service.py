@@ -55,23 +55,23 @@ class CustomerSyncService:
         except FincodeApiError:
             customer_id = f"local_user_{user.id}"
 
-        # rollback はセッション内の全オブジェクトを expire するため、以降の属性アクセスが
-        # 暗黙 IO にならないよう ID を先に退避しておく。
-        user_id = user.id
         customer = FincodeCustomer(
-            user_id=user_id,
+            user_id=user.id,
             fincode_customer_id=customer_id,
         )
-        db.add(customer)
+        # 並行する初回作成（初回カード登録と初回契約の同時実行など）は
+        # ``fincode_customers.user_id`` の unique 制約で片方が弾かれる。savepoint に
+        # 閉じ込めて INSERT し、負けた側は勝った側の行を読み直して返す。素の
+        # IntegrityError を伝播させると 500 になり、``db.rollback()`` では呼び出し元が
+        # 同一セッションで積んだ変更まで巻き添えにする（全オブジェクトが expire され、
+        # 以降の属性アクセスが暗黙 IO になる）ため、どちらも採らない。
         try:
-            await db.flush()
+            async with db.begin_nested():
+                db.add(customer)
+                await db.flush()
         except IntegrityError:
-            # 事前 SELECT を通り抜けた並行 INSERT（TOCTOU）。fincode_customers.user_id は
-            # unique なので、勝った側の行を読み直して返す。fincode 側は決定論的な顧客 ID +
-            # 固定 Idempotency-Key のため二重作成にはならない。
-            await db.rollback()
             winner: FincodeCustomer | None = await db.scalar(
-                select(FincodeCustomer).where(FincodeCustomer.user_id == user_id)
+                select(FincodeCustomer).where(FincodeCustomer.user_id == user.id)
             )
             if winner is None:
                 raise

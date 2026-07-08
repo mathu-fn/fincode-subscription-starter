@@ -126,8 +126,11 @@ class FincodeHttpClient:
                 self._breaker.record_failure()
                 last_exc = FincodeTimeoutError(str(e))
             except httpx.HTTPError as e:
+                # 接続失敗などの transport エラーは一時的失敗。素の FincodeApiError に
+                # すると呼び出し側（plan_service.fetch 等）が「4xx = 恒久エラー」として
+                # 422 に誤翻訳してしまうため、503 系として区別する。
                 self._breaker.record_failure()
-                last_exc = FincodeApiError(str(e))
+                last_exc = FincodeServerError(str(e))
             else:
                 status = response.status_code
                 if 200 <= status < 300:

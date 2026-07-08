@@ -111,7 +111,7 @@ from app.core.exceptions import (
             UnprocessableError(code="invalid_webhook_payload"),
             "invalid_webhook_payload",
             422,
-            "Webhook payload is missing required fields.",
+            "Webhook payload is malformed or missing required fields.",
         ),
     ],
 )

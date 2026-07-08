@@ -304,6 +304,17 @@ async def test_missing_event_id_is_unprocessable_not_unauthorized(db_session) ->
     assert exc_info.value.code == "invalid_webhook_payload"
 
 
+async def test_invalid_json_payload_raises_unprocessable(db_session) -> None:
+    # 署名済みでも本文が JSON でなければ 500 でなく 422（恒久エラー、再送で直らない）。
+    body = b"{not-json"
+    signature = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    with pytest.raises(UnprocessableError) as exc_info:
+        await FincodeWebhookHandler(WEBHOOK_SECRET).handle(
+            payload=body, signature=signature, db=db_session
+        )
+    assert exc_info.value.code == "invalid_webhook_payload"
+
+
 async def test_charged_at_parsed_from_fincode_process_date(
     db_session,
     registered_user: dict[str, Any],

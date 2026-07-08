@@ -63,7 +63,14 @@ class FincodeWebhookHandler:
         if not verify_signature(payload, signature, self._secret):
             raise UnauthenticatedError(code="invalid_webhook_signature")
 
-        body = json.loads(payload.decode() or "{}")
+        # 署名済みでも本文が壊れている可能性はある。素の JSONDecodeError を 500 に
+        # せず 422 へ翻訳する。再送されても直らない恒久エラーなので 5xx は返さない。
+        try:
+            body = json.loads(payload.decode() or "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            raise UnprocessableError(code="invalid_webhook_payload") from e
+        if not isinstance(body, dict):
+            raise UnprocessableError(code="invalid_webhook_payload")
         event_id = body.get("event_id") or body.get("id") or ""
         event_type = body.get("event") or body.get("type") or "unknown"
 

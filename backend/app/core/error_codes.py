@@ -18,5 +18,5 @@ ERROR_DEFAULTS: dict[str, str] = {
     "invalid_token": "Invalid token.",
     "email_already_registered": "This email is already registered.",
     "invalid_webhook_signature": "Webhook signature verification failed.",
-    "invalid_webhook_payload": "Webhook payload is missing required fields.",
+    "invalid_webhook_payload": "Webhook payload is malformed or missing required fields.",
 }

@@ -1,3 +1,10 @@
+"""fincode サブスクリプションサービス。
+
+サブスク作成・解約の薄いラッパー。作成の Idempotency-Key は呼び出し元が管理する
+ノンス（クライアント提供の Idempotency-Key または生成 UUID）から決定論的に生成し、
+リトライ全体で同じキーを再利用する。解約（DELETE）は本質的に冪等なのでキー不要。
+"""
+
 from __future__ import annotations
 
 from datetime import datetime
