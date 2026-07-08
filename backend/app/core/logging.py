@@ -37,6 +37,9 @@ def configure_logging() -> None:
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso"),
+            # logger.exception の exc_info をトレースバック文字列へ整形する。
+            # _redact より前に置き、整形後のイベント辞書にもリダクトを効かせる。
+            structlog.processors.format_exc_info,
             _redact,
             structlog.processors.JSONRenderer(),
         ],
