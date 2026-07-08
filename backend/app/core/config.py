@@ -80,6 +80,8 @@ class Settings(BaseSettings):
             raise ValueError("FINCODE_WEBHOOK_SECRET must be changed in production.")
         if not self.google_client_id:
             raise ValueError("GOOGLE_CLIENT_ID must be set in production.")
+        if not self.fincode_api_key:
+            raise ValueError("FINCODE_API_KEY must be set in production.")
         return self
 
 
