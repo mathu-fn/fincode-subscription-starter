@@ -6,9 +6,11 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+import pytest
 from sqlalchemy import select
 
 from app.core.enums import PaymentStatus, SubscriptionStatus
+from app.core.exceptions import UnprocessableError
 from app.models.subscription import Subscription
 from app.models.subscription_result import SubscriptionResult
 from app.services.fincode.webhook_handler import FincodeWebhookHandler
@@ -238,6 +240,105 @@ async def test_payment_failed_keeps_cancelled_subscription(
     )
     assert result is not None
     assert result.status == PaymentStatus.FAILED
+
+
+async def test_duplicate_event_id_is_ignored(
+    db_session,
+    registered_user: dict[str, Any],
+) -> None:
+    # 二段冪等の第 1 段: 同一 event_id の再送は webhook_events_seen の UNIQUE 違反で
+    # 検知し、業務処理へ入らず ACK する。状態遷移も結果行も二重適用されない。
+    sub = _make_subscription(
+        registered_user,
+        fincode_subscription_id="sub_dedup",
+        status=SubscriptionStatus.ACTIVE,
+    )
+    db_session.add(sub)
+    await db_session.commit()
+
+    payload = {
+        "event_id": "evt_dedup_1",
+        "event": "subscription.payment.failed",
+        "data": {
+            "subscription_id": "sub_dedup",
+            "payment_id": "pay_dedup",
+            "amount": "500",
+            "status": "CANCELED",
+        },
+    }
+    await _handle(db_session, payload)
+    await db_session.refresh(sub)
+    assert sub.status == SubscriptionStatus.UNPAID
+
+    # 手動で ACTIVE へ戻してから同一 event_id を再送。処理済みイベントなので
+    # 再度 UNPAID に落とされない（第 2 段の upsert とは独立に第 1 段で止まる）。
+    sub.status = SubscriptionStatus.ACTIVE
+    await db_session.commit()
+
+    await _handle(db_session, payload)
+    await db_session.refresh(sub)
+    assert sub.status == SubscriptionStatus.ACTIVE
+
+    rows = list(
+        (
+            await db_session.execute(
+                select(SubscriptionResult).where(
+                    SubscriptionResult.fincode_payment_id == "pay_dedup"
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+
+
+async def test_missing_event_id_is_unprocessable_not_unauthorized(db_session) -> None:
+    # 署名は正しいが event_id が無いペイロード。重複排除キーが無く安全に処理できない
+    # ため 422 (invalid_webhook_payload) で fincode に差し戻す。署名不正 (401) とは区別する。
+    body, signature = _signed_payload({"event": "subscription.payment.succeeded", "data": {}})
+    with pytest.raises(UnprocessableError) as exc_info:
+        await FincodeWebhookHandler(WEBHOOK_SECRET).handle(
+            payload=body, signature=signature, db=db_session
+        )
+    assert exc_info.value.code == "invalid_webhook_payload"
+
+
+async def test_charged_at_parsed_from_fincode_process_date(
+    db_session,
+    registered_user: dict[str, Any],
+) -> None:
+    # fincode の process_date はスラッシュ区切りの JST。受信時刻ではなく
+    # 実課金日時が UTC に変換されて保存される（履歴 API のソートキー）。
+    sub = _make_subscription(
+        registered_user,
+        fincode_subscription_id="sub_charged_at",
+        status=SubscriptionStatus.ACTIVE,
+    )
+    db_session.add(sub)
+    await db_session.commit()
+
+    await _handle(
+        db_session,
+        {
+            "event_id": "evt_charged_at",
+            "event": "subscription.payment.succeeded",
+            "data": {
+                "subscription_id": "sub_charged_at",
+                "payment_id": "pay_charged_at",
+                "amount": "500",
+                "status": "CAPTURED",
+                "process_date": "2026/07/08 12:00:00.000",
+            },
+        },
+    )
+
+    result = await db_session.scalar(
+        select(SubscriptionResult).where(SubscriptionResult.fincode_payment_id == "pay_charged_at")
+    )
+    assert result is not None
+    # JST 12:00 = UTC 03:00
+    assert as_utc(result.charged_at) == datetime(2026, 7, 8, 3, 0, tzinfo=UTC)
 
 
 async def test_payment_webhook_upsert_is_idempotent(

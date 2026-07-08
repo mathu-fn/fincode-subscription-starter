@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import PaymentStatus, SubscriptionStatus
-from app.core.exceptions import UnauthenticatedError
+from app.core.exceptions import UnauthenticatedError, UnprocessableError
 from app.core.logging import get_logger
 from app.models.subscription import Subscription
 from app.models.subscription_result import SubscriptionResult
@@ -33,6 +33,7 @@ from app.services.subscription_periods import (
     apply_current_period_end,
     cancel_at_period_end,
     has_future_period,
+    parse_fincode_datetime,
 )
 
 logger = get_logger(__name__)
@@ -46,12 +47,11 @@ def verify_signature(payload: bytes, signature: str | None, secret: str) -> bool
 
 
 def _parse_charged_at(value: Any) -> datetime:
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-    return datetime.now(UTC)
+    # fincode の日時はスラッシュ区切り JST（"2026/07/08 12:00:00.000" 等）。ISO 形式と
+    # 合わせて subscription_periods.parse_fincode_datetime に解析を一本化する。
+    # 解析不能な場合のみ受信時刻へフォールバックする（charged_at は NOT NULL かつ
+    # 履歴 API のソートキーのため、欠損より近似値を優先する）。
+    return parse_fincode_datetime(value) or datetime.now(UTC)
 
 
 class FincodeWebhookHandler:
@@ -68,8 +68,10 @@ class FincodeWebhookHandler:
         event_type = body.get("event") or body.get("type") or "unknown"
 
         if not event_id:
-            raise UnauthenticatedError(
-                "Missing event_id in webhook payload.", code="invalid_webhook_signature"
+            # 署名検証は通過しているため「署名不正」とは区別する。event_id は重複排除の
+            # キーなので、無いイベントは安全に処理できず非 2xx で fincode に差し戻す。
+            raise UnprocessableError(
+                "Missing event_id in webhook payload.", code="invalid_webhook_payload"
             )
 
         # webhook_events_seen への INSERT で重複排除する。UNIQUE 制約違反が発生した場合、
@@ -101,7 +103,12 @@ class FincodeWebhookHandler:
     ) -> None:
         data = body.get("data", body)
         fincode_sub_id = data.get("subscription_id") or data.get("fincode_subscription_id")
-        fincode_payment_id = data.get("payment_id") or data.get("id")
+        fincode_payment_id = data.get("payment_id")
+        if not fincode_payment_id and "data" in body:
+            # "id" へのフォールバックは data ラッパがある形状に限定する。ラッパ無しの
+            # フラット形状ではトップレベルの "id" はイベント ID であり、payment_id と
+            # 誤認すると upsert キーを汚染する。
+            fincode_payment_id = data.get("id")
         if not fincode_sub_id or not fincode_payment_id:
             seen.dlq_reason = "missing subscription_id or payment_id"
             return
@@ -169,7 +176,11 @@ class FincodeWebhookHandler:
 
     async def _handle_cancellation(self, body: dict[str, Any], db: AsyncSession) -> None:
         data = body.get("data", body)
-        fincode_sub_id = data.get("subscription_id") or data.get("id")
+        fincode_sub_id = data.get("subscription_id")
+        if not fincode_sub_id and "data" in body:
+            # _handle_payment と同じ理由で、"id" フォールバックは data ラッパがある
+            # 形状（= "id" がサブスクオブジェクトの ID である形状）に限定する。
+            fincode_sub_id = data.get("id")
         if not fincode_sub_id:
             return
         sub = await db.scalar(
