@@ -42,7 +42,9 @@ async def create_subscription(
     db: SessionDep,
     user: CurrentUserDep,
     manager: SubscriptionManagerDep,
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=64)] = None,
+    idempotency_key: Annotated[
+        str | None, Header(alias="Idempotency-Key", min_length=1, max_length=64)
+    ] = None,
 ) -> SubscriptionOut:
     sub = await manager.subscribe(
         db,
@@ -64,7 +66,9 @@ async def change_subscription_plan(
     db: SessionDep,
     user: CurrentUserDep,
     manager: SubscriptionManagerDep,
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=64)] = None,
+    idempotency_key: Annotated[
+        str | None, Header(alias="Idempotency-Key", min_length=1, max_length=64)
+    ] = None,
 ) -> SubscriptionOut:
     sub = await manager.change_plan(
         db,
@@ -100,16 +104,7 @@ async def list_plans(
     manager: SubscriptionManagerDep,
 ) -> list[PlanOut]:
     plans = await manager.list_plans()
-    return [
-        PlanOut(
-            fincode_plan_id=p["fincode_plan_id"],
-            name=p["name"],
-            amount=p["amount"],
-            currency=p["currency"],
-            interval=p["interval"],
-        )
-        for p in plans
-    ]
+    return [PlanOut.model_validate(p) for p in plans]
 
 
 @router.get("/history", response_model=PaginatedBillingHistory)

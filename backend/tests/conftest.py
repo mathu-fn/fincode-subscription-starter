@@ -135,6 +135,78 @@ async def client(app_instance) -> AsyncIterator[AsyncClient]:
         yield ac
 
 
+CURRENT_PERIOD_END = "2099-01-01T00:00:00+00:00"
+
+
+class FakeFincodeClient:
+    """``FincodeClient`` プロトコルの最小フェイク。呼び出しを記録する。
+
+    fincode は CLAUDE.md の方針どおり自動テストから直接叩かない。このフェイクを
+    ``get_fincode_client`` に差し替えることで、各フローが fincode をいつ・どう
+    呼ぶか（あるいは呼ばないか）を検証できる。
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+        # クエリ/ボディまで検証したいテスト向けに、リクエスト全体も並行記録する
+        # （既存の ``calls`` 2タプル assert は壊さない）。
+        self.requests: list[dict[str, Any]] = []
+
+    async def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        self.calls.append((method, path))
+        self.requests.append({"method": method, "path": path, "params": params, "json": json})
+        if method == "GET" and path == "/v1/plans":
+            return {"list": []}
+        if method == "GET" and path.startswith("/v1/plans/"):
+            return {
+                "id": path.rsplit("/", 1)[-1],
+                "plan_name": "Pro",
+                "amount": "500",
+                "interval_pattern": "month",
+            }
+        if method == "POST" and path == "/v1/customers":
+            return {"id": json["id"] if json else "local_user_1"}
+        if method == "POST" and path.endswith("/cards"):
+            return {
+                "id": "card_test_1",
+                "brand": "VISA",
+                "card_no": "************4242",
+                "expire": "3012",
+                "default_flag": "1",
+            }
+        if method == "DELETE" and "/cards/" in path:
+            return {}
+        if method == "POST" and path == "/v1/subscriptions":
+            return {
+                "id": "sub_test_1",
+                "status": "ACTIVE",
+                "current_period_end": CURRENT_PERIOD_END,
+            }
+        if method == "DELETE" and path == "/v1/subscriptions/sub_test_1":
+            return {"id": "sub_test_1", "status": "CANCELED"}
+        raise AssertionError(f"unexpected fincode call: {method} {path}")
+
+    async def aclose(self) -> None:
+        pass
+
+
+@pytest_asyncio.fixture()
+async def fake_fincode(app_instance: Any) -> FakeFincodeClient:
+    from app.api.deps import get_fincode_client
+
+    fake = FakeFincodeClient()
+    app_instance.dependency_overrides[get_fincode_client] = lambda: fake
+    return fake
+
+
 @pytest_asyncio.fixture()
 async def registered_user(db_session: AsyncSession) -> dict[str, Any]:
     # ログイン手段は Google 認証のみなので、テスト用ユーザーは API を経由せず

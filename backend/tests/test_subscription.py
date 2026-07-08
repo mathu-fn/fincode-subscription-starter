@@ -10,72 +10,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, cast
 
-import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.models.subscription import Subscription
-
-CURRENT_PERIOD_END = "2099-01-01T00:00:00+00:00"
-
-
-class FakeFincodeClient:
-    """``FincodeClient`` プロトコルの最小フェイク。呼び出しを記録する。"""
-
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, str]] = []
-        # クエリ/ボディまで検証したい新テスト向けに、リクエスト全体も並行記録する
-        # （既存の ``calls`` 2タプル assert は壊さない）。
-        self.requests: list[dict[str, Any]] = []
-
-    async def request(
-        self,
-        method: str,
-        path: str,
-        *,
-        json: dict[str, Any] | None = None,
-        params: dict[str, str] | None = None,
-        idempotency_key: str | None = None,
-    ) -> dict[str, Any]:
-        self.calls.append((method, path))
-        self.requests.append({"method": method, "path": path, "params": params, "json": json})
-        if method == "GET" and path == "/v1/plans":
-            return {"list": []}
-        if method == "GET" and path.startswith("/v1/plans/"):
-            return {
-                "id": path.rsplit("/", 1)[-1],
-                "plan_name": "Pro",
-                "amount": "500",
-                "interval_pattern": "month",
-            }
-        if method == "POST" and path == "/v1/customers":
-            return {"id": json["id"] if json else "local_user_1"}
-        if method == "POST" and path.endswith("/cards"):
-            return {
-                "id": "card_test_1",
-                "brand": "VISA",
-                "card_no": "************4242",
-                "expire": "3012",
-                "default_flag": "1",
-            }
-        if method == "POST" and path == "/v1/subscriptions":
-            return {
-                "id": "sub_test_1",
-                "status": "ACTIVE",
-                "current_period_end": CURRENT_PERIOD_END,
-            }
-        if method == "DELETE" and path == "/v1/subscriptions/sub_test_1":
-            return {"id": "sub_test_1", "status": "CANCELED"}
-        raise AssertionError(f"unexpected fincode call: {method} {path}")
-
-
-@pytest_asyncio.fixture()
-async def fake_fincode(app_instance) -> FakeFincodeClient:
-    from app.api.deps import get_fincode_client
-
-    fake = FakeFincodeClient()
-    app_instance.dependency_overrides[get_fincode_client] = lambda: fake
-    return fake
+from tests.conftest import CURRENT_PERIOD_END, FakeFincodeClient  # noqa: F401
 
 
 async def test_list_plans_includes_free_plan(
@@ -128,7 +67,7 @@ async def test_subscribe_with_missing_card_returns_card_not_found(
 
 
 async def test_cancel_free_plan_is_local_only(
-    auth_client: AsyncClient, fake_fincode: FakeFincodeClient
+    auth_client: AsyncClient, fake_fincode: FakeFincodeClient, db_session
 ) -> None:
     create = await auth_client.post("/api/subscription", json={"fincode_plan_id": "free"})
     assert create.status_code == 201, create.text
@@ -139,6 +78,14 @@ async def test_cancel_free_plan_is_local_only(
     assert cancel.json()["cancel_at_period_end"] is False
     # 契約・解約のどちらでも fincode は呼ばれていない。
     assert fake_fincode.calls == []
+
+    # フリープラン解約も有料解約と同様に監査ログを残す。
+    from app.models.audit_log import AuditLog
+
+    audit = await db_session.scalar(select(AuditLog).where(AuditLog.event == "subscription.cancel"))
+    assert audit is not None
+    assert audit.after["status"] == "cancelled"
+    assert audit.after["cancelled_at"] is not None
 
 
 async def test_free_plan_occupies_single_active_slot(
@@ -327,3 +274,141 @@ async def test_change_paid_to_free_plan_cancels_with_pay_type_query(
 
     req = _find_request(fake_fincode, "DELETE", "/v1/subscriptions/sub_test_1")
     assert req["params"] == {"pay_type": "Card"}
+
+
+async def test_subscribe_replays_same_idempotency_key_without_new_charge(
+    auth_client: AsyncClient, fake_fincode: FakeFincodeClient
+) -> None:
+    # レスポンス消失後のクライアントリトライ（同一 Idempotency-Key の再 POST）は
+    # 新しい fincode 契約を作らず、以前成功した契約をそのまま返す（二重課金防止）。
+    card = await auth_client.post("/api/subscription/cards", json={"token": "tok_test_replay"})
+    assert card.status_code == 201, card.text
+    payload = {"fincode_plan_id": "plan_test_pro", "card_id": card.json()["id"]}
+    headers = {"Idempotency-Key": "replay-key-1"}
+
+    first = await auth_client.post("/api/subscription", json=payload, headers=headers)
+    assert first.status_code == 201, first.text
+
+    second = await auth_client.post("/api/subscription", json=payload, headers=headers)
+    assert second.status_code == 201, second.text
+    assert second.json()["id"] == first.json()["id"]
+
+    creates = [c for c in fake_fincode.calls if c == ("POST", "/v1/subscriptions")]
+    assert len(creates) == 1
+
+
+async def test_paid_subscription_freezes_plan_snapshot(
+    auth_client: AsyncClient, fake_fincode: FakeFincodeClient, db_session
+) -> None:
+    # 契約時点の fincode プラン情報は plan_snapshot に JSONB で凍結保存される
+    # （CLAUDE.md の必須不変条件。fincode 側のプラン変更から過去契約を守る）。
+    created = await _create_paid_subscription(auth_client)
+
+    sub = await db_session.get(Subscription, created["id"])
+    assert sub is not None
+    assert sub.plan_snapshot == {
+        "id": "plan_test_pro",
+        "plan_name": "Pro",
+        "amount": "500",
+        "interval_pattern": "month",
+    }
+
+
+async def test_subscribe_with_expired_card_returns_422(
+    auth_client: AsyncClient, fake_fincode: FakeFincodeClient, db_session
+) -> None:
+    from app.models.fincode_card import FincodeCard
+
+    card = await auth_client.post("/api/subscription/cards", json={"token": "tok_test_expired"})
+    assert card.status_code == 201, card.text
+    card_id = card.json()["id"]
+
+    row = await db_session.get(FincodeCard, card_id)
+    assert row is not None
+    row.exp_year = 2020
+    row.exp_month = 1
+    await db_session.commit()
+
+    response = await auth_client.post(
+        "/api/subscription", json={"fincode_plan_id": "plan_test_pro", "card_id": card_id}
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["code"] == "expired_card"
+
+
+async def test_cancel_and_change_without_subscription_return_404(
+    auth_client: AsyncClient, fake_fincode: FakeFincodeClient
+) -> None:
+    cancel = await auth_client.delete("/api/subscription")
+    assert cancel.status_code == 404, cancel.text
+    assert cancel.json()["detail"]["code"] == "subscription_not_found"
+
+    change = await auth_client.patch("/api/subscription", json={"fincode_plan_id": "free"})
+    assert change.status_code == 404, change.text
+    assert change.json()["detail"]["code"] == "subscription_not_found"
+
+
+async def test_billing_history_paginates_and_isolates_users(
+    auth_client: AsyncClient,
+    fake_fincode: FakeFincodeClient,
+    db_session,
+) -> None:
+    from app.models.subscription_result import SubscriptionResult
+    from app.models.user import User
+
+    created = await _create_paid_subscription(auth_client)
+
+    # 自分の課金結果 3 件 + 他ユーザーの結果 1 件を用意する。
+    for i in range(3):
+        db_session.add(
+            SubscriptionResult(
+                subscription_id=created["id"],
+                fincode_subscription_id="sub_test_1",
+                fincode_payment_id=f"pay_hist_{i}",
+                status="succeeded",
+                amount=500,
+                charged_at=datetime(2026, 1, i + 1, tzinfo=UTC),
+                fincode_response=None,
+            )
+        )
+    other_user = User(google_sub="history-other", email="other@example.com", name="Other")
+    db_session.add(other_user)
+    await db_session.flush()
+    other_sub = Subscription(
+        user_id=other_user.id,
+        fincode_subscription_id="sub_other_hist",
+        nonce="nonce-other-hist",
+        fincode_plan_id="plan_test_pro",
+        plan_name="Pro",
+        plan_amount=500,
+        plan_interval="month",
+        status="active",
+    )
+    db_session.add(other_sub)
+    await db_session.flush()
+    db_session.add(
+        SubscriptionResult(
+            subscription_id=other_sub.id,
+            fincode_subscription_id="sub_other_hist",
+            fincode_payment_id="pay_other",
+            status="succeeded",
+            amount=500,
+            charged_at=datetime(2026, 1, 10, tzinfo=UTC),
+            fincode_response=None,
+        )
+    )
+    await db_session.commit()
+
+    page1 = await auth_client.get("/api/subscription/history", params={"page": 1, "per_page": 2})
+    assert page1.status_code == 200, page1.text
+    body = page1.json()
+    # total は自分の 3 件のみ（他ユーザーの pay_other は混ざらない）。
+    assert body["total"] == 3
+    assert body["page"] == 1
+    assert body["per_page"] == 2
+    # charged_at 降順。
+    assert [r["fincode_payment_id"] for r in body["data"]] == ["pay_hist_2", "pay_hist_1"]
+
+    page2 = await auth_client.get("/api/subscription/history", params={"page": 2, "per_page": 2})
+    assert page2.status_code == 200
+    assert [r["fincode_payment_id"] for r in page2.json()["data"]] == ["pay_hist_0"]
