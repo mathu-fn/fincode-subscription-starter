@@ -315,7 +315,7 @@ npx @redocly/cli lint docs/api/openapi.yml
 
 [docs/README.md](./docs/README.md) から読み始めてください。
 
-- [ローカル開発](./docs/getting-started/local-development.md)
+- [クイックスタート](./docs/getting-started/quickstart.md)
 - [Fincode セットアップ](./docs/getting-started/fincode-setup.md)
 - [API 仕様](./docs/api/README.md)
 - [アーキテクチャ概要](./docs/architecture/overview.md)

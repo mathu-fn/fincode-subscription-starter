@@ -14,8 +14,7 @@
 
 | ドキュメント | 内容 |
 | --- | --- |
-| [getting-started/quickstart.md](./getting-started/quickstart.md) | 起動コマンドと画面ごとの使い方を 1 ページに集約（最短経路） |
-| [getting-started/local-development.md](./getting-started/local-development.md) | Python、uv、Node、DB、Alembic、FastAPI、React 開発サーバーのセットアップ |
+| [getting-started/quickstart.md](./getting-started/quickstart.md) | セットアップから起動、画面ごとの使い方まで 1 ページに集約 |
 | [getting-started/fincode-setup.md](./getting-started/fincode-setup.md) | Fincode テストアカウント、APIキー、プラン、テストカード |
 | [getting-started/testing.md](./getting-started/testing.md) | pytest、Vitest、テストDB、fincodeモック方針 |
 
@@ -50,15 +49,12 @@
 | ドキュメント | 内容 |
 | --- | --- |
 | [operations/configuration.md](./operations/configuration.md) | 環境変数リファレンス（`.env` の全キーと既定値・用途） |
-| [operations/deployment.md](./operations/deployment.md) | 本番チェックリスト、Uvicorn、Nginx、マイグレーション、Webhook 受信 |
-| [operations/api-token-rotation.md](./operations/api-token-rotation.md) | JWT寿命、更新・ローテーション、長期稼働クライアントの注意点 |
+| [operations/deployment.md](./operations/deployment.md) | 本番チェックリスト、Uvicorn、Nginx、マイグレーション、キー / JWT のローテーション |
 | [operations/password-reset.md](./operations/password-reset.md) | パスワードリセットの設計メモと復元方針 |
 
 ## セキュリティ
 
-| ドキュメント | 内容 |
-| --- | --- |
-| [security/2026-05-vulnerability-audit.md](./security/2026-05-vulnerability-audit.md) | 脆弱性診断メモと FastAPI 実装時の確認ポイント |
+セキュリティ上の必須ガードと脆弱性の報告手順は [リポジトリ直下の SECURITY.md](../SECURITY.md) にまとめています。
 
 ## 紹介記事
 
