@@ -52,8 +52,21 @@ GitHub のドキュメント: <https://docs.github.com/en/code-security/security
 
 設計上の必須ガード（カード情報の取り扱い、JWT、Webhook 署名検証、Idempotency-Key、レート制限など）は次のドキュメントにまとめています。
 
-- [docs/security/2026-05-vulnerability-audit.md](./docs/security/2026-05-vulnerability-audit.md)
+- [docs/customization/index.md（うっかり無効化してはいけないガード）](./docs/customization/index.md)
 - [docs/architecture/error-handling.md](./docs/architecture/error-handling.md)
 - [CLAUDE.md（コントリビューター向け制約）](./AGENTS.md)
 
 これらの設計を逸脱する変更は、PR レビュー時に必ず指摘してください。
+
+## フォーク後の自己診断チェックリスト
+
+このリポジトリをフォークして本番投入する前に、少なくとも次を確認してください。
+
+- 依存関係スキャン: Python と Node の lockfile
+- Secret scan: `.env`、API key、JWT secret、fincode key
+- OpenAPI と実装の差分
+- CORS とセキュリティヘッダー
+- レート制限が実際に効いているか
+- IDOR（他ユーザーのリソースに触れないか）のテスト
+- Webhook 署名検証と冪等性のテスト
+- ログにシークレットや token が出ていないこと

@@ -32,7 +32,7 @@ cp .env.example .env
 | `JWT_ALGORITHM` | `HS256` | 署名アルゴリズム |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | アクセストークン有効期限（分） |
 
-`JWT_SECRET_KEY` を変更すると既存トークンは全て無効になります（複数検証鍵をサポートしていないため）。運用方針は [api-token-rotation.md](./api-token-rotation.md) を参照。
+`JWT_SECRET_KEY` を変更すると既存トークンは全て無効になります（複数検証鍵をサポートしていないため）。運用方針は [deployment.md の「JWT トークン運用」](./deployment.md#jwt-トークン運用) を参照。
 
 ## fincode
 
