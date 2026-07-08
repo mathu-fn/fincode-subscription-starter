@@ -62,6 +62,8 @@ cp .env.example .env
 | --- | --- | --- |
 | `RATE_LIMIT_STORAGE_URI` | `memory://` | slowapi のストレージ URI。複数ワーカー構成では Redis（例: `redis://localhost:6379/0`）を推奨 |
 
+未認証エンドポイント（`/api/auth/google` など）のレート制限はクライアント IP をキーにします。リバースプロキシ / ロードバランサー配下では、uvicorn に `--proxy-headers --forwarded-allow-ips=<信頼するプロキシのIP>` を付けて `X-Forwarded-For` を解決してください。これを怠ると全リクエストがプロキシの IP に見え、未認証の制限（例: ログイン 5 回/分）が全ユーザー合算になりログインを妨害します。
+
 ## フロントエンド (Vite)
 
 これらは `frontend/` のビルド時に Vite が読み取ります。`VITE_` プレフィックス付きの値はビルド成果物に埋め込まれるため、シークレットを入れないでください。
