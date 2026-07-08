@@ -35,7 +35,7 @@ cp .env.example .env
 
 `GOOGLE_CLIENT_ID` は [Google Cloud Console](https://console.cloud.google.com/apis/credentials) で「OAuth クライアント ID（ウェブ アプリケーション）」を作成して取得します。「承認済みの JavaScript 生成元」にフロントエンドのオリジン（ローカルなら `http://localhost:5173`）を登録してください。リダイレクト URI は不要です（GIS のボタンフローを使用）。
 
-`JWT_SECRET_KEY` を変更すると既存トークンは全て無効になります（複数検証鍵をサポートしていないため）。運用方針は [api-token-rotation.md](./api-token-rotation.md) を参照。
+`JWT_SECRET_KEY` を変更すると既存トークンは全て無効になります（複数検証鍵をサポートしていないため）。運用方針は [deployment.md の「JWT トークン運用」](./deployment.md#jwt-トークン運用) を参照。
 
 ## fincode
 

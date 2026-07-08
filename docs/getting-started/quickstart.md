@@ -24,6 +24,9 @@ cp .env.example .env
 FINCODE_API_KEY=m_test_xxxxxxxxxxxxxxxxxxxxxxx
 FINCODE_PUBLIC_KEY=p_test_xxxxxxxxxxxxxxxxxxxxxxx
 FINCODE_WEBHOOK_SECRET=（fincode 管理画面で発行した署名キー）
+
+# フロントエンドが読み取る公開鍵（FINCODE_PUBLIC_KEY と同じ値）
+VITE_FINCODE_PUBLIC_KEY=p_test_xxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 続いて Google ログイン用のクライアント ID を設定します。[Google Cloud Console](https://console.cloud.google.com/apis/credentials) で「OAuth クライアント ID（ウェブ アプリケーション）」を作成し、「承認済みの JavaScript 生成元」に `http://localhost:5173` を登録してください（リダイレクト URI は不要）。
@@ -32,6 +35,8 @@ FINCODE_WEBHOOK_SECRET=（fincode 管理画面で発行した署名キー）
 GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
 VITE_GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com   # バックエンドと同一値
 ```
+
+全環境変数の意味と既定値は [../operations/configuration.md](../operations/configuration.md) を参照してください。
 
 ## 起動
 
@@ -141,8 +146,9 @@ Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/api/webhooks/fincode'
 
 ## 次に読むもの
 
-- [ローカル開発](./local-development.md) — 詳細な開発手順
 - [Fincodeセットアップ](./fincode-setup.md) — 実 API キー取得とテストカード
+- [テストガイド](./testing.md) — pytest / Vitest / fincode モック方針
+- [環境変数リファレンス](../operations/configuration.md) — `.env` の全キーと既定値
 - [API 仕様](../api/README.md) — エンドポイント一覧とエラー形式
 - [アーキテクチャ概要](../architecture/overview.md) — レイヤ責務とシーケンス図
 - [Webhook 統合](../customization/webhooks.md) — 署名検証と冪等性
