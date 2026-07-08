@@ -44,8 +44,13 @@ class Subscription(Base, TimestampMixin):
     plan_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     plan_interval: Mapped[str] = mapped_column(String(32), nullable=False)
     plan_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # server_default は migration 0003 と揃える（ORM を介さない INSERT でも挙動を一致させる）。
     status: Mapped[str] = mapped_column(
-        String(32), default=SubscriptionStatus.ACTIVE, nullable=False, index=True
+        String(32),
+        default=SubscriptionStatus.ACTIVE,
+        server_default="active",
+        nullable=False,
+        index=True,
     )
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     current_period_end: Mapped[datetime | None] = mapped_column(
