@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
+# 照合はキー名の小文字完全一致（scrub 参照）。部分一致にしないのは
+# "card_brand" のような非機微キーの巻き添えを避けるため。新しい機微フィールドを
+# schema に足すときは、そのフィールド名をここにも追加すること。
 SENSITIVE_KEYS = {
     "password",
     "password_hash",
@@ -19,6 +22,9 @@ SENSITIVE_KEYS = {
     "card_number",
     "pan",
     "cvc",
+    # Google ID トークン（GoogleLoginRequest.credential）。JWT そのもの。
+    "credential",
+    "id_token",
     "fincode_signature",
     "x-api-key",
     "api_key",
