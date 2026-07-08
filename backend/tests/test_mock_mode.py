@@ -56,7 +56,9 @@ async def test_mock_client_card_is_deterministic_per_token() -> None:
 
     assert a["id"].startswith("card_mock_")
     assert a["brand"] in {"VISA", "Mastercard", "JCB", "AMEX"}
-    assert len(a["card_no"][-4:]) == 4
+    # card_no は下 4 桁以外がマスクされている。
+    assert a["card_no"].startswith("************")
+    assert a["card_no"][-4:].isdigit()
     # 同じトークンは同じカード、別トークンは（基本的に）別カードになる。
     assert a == again
     assert a["id"] != b["id"]

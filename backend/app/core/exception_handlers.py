@@ -57,6 +57,20 @@ def register_exception_handlers(app: FastAPI) -> None:
             content=_envelope("rate_limited", f"Too many requests: {exc.detail}"),
         )
 
+    @app.exception_handler(Exception)
+    async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        # 未捕捉例外もエンベロープ形式を維持する。内部詳細はクライアントへ出さず、
+        # スタックトレースはサーバーログにのみ残す。
+        logger.exception(
+            "unhandled_exception",
+            path=str(request.url.path),
+            method=request.method,
+        )
+        return JSONResponse(
+            status_code=500,
+            content=_envelope("internal_error", "An internal error occurred."),
+        )
+
     @app.exception_handler(StarletteHTTPException)
     async def _http_exception_handler(_: Request, exc: StarletteHTTPException) -> JSONResponse:
         detail = exc.detail

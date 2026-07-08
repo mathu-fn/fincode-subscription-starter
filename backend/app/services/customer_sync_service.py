@@ -63,13 +63,14 @@ class CustomerSyncService:
         # ``fincode_customers.user_id`` の unique 制約で片方が弾かれる。savepoint に
         # 閉じ込めて INSERT し、負けた側は勝った側の行を読み直して返す。素の
         # IntegrityError を伝播させると 500 になり、``db.rollback()`` では呼び出し元が
-        # 同一セッションで積んだ変更まで巻き添えにするため、どちらも採らない。
+        # 同一セッションで積んだ変更まで巻き添えにする（全オブジェクトが expire され、
+        # 以降の属性アクセスが暗黙 IO になる）ため、どちらも採らない。
         try:
             async with db.begin_nested():
                 db.add(customer)
                 await db.flush()
         except IntegrityError:
-            winner = await db.scalar(
+            winner: FincodeCustomer | None = await db.scalar(
                 select(FincodeCustomer).where(FincodeCustomer.user_id == user.id)
             )
             if winner is None:

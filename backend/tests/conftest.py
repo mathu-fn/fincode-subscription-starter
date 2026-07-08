@@ -21,11 +21,14 @@ from testcontainers.postgres import PostgresContainer
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-please-change-very-long-string")
 os.environ.setdefault("FINCODE_WEBHOOK_SECRET", "test-webhook-secret")
 os.environ.setdefault("RATE_LIMIT_STORAGE_URI", "memory://")
+os.environ.setdefault("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
 
 
 @pytest.fixture(scope="session")
 def postgres_container() -> Iterator[PostgresContainer]:
-    container = PostgresContainer("postgres:16-alpine", username="app", password="change-me", dbname="subscription_app")
+    container = PostgresContainer(
+        "postgres:16-alpine", username="app", password="change-me", dbname="subscription_app"
+    )
     container.start()
     try:
         yield container
@@ -74,7 +77,9 @@ def applied_migrations(postgres_container: PostgresContainer) -> str:
 
     cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", sync_url)
-    cfg.set_main_option("script_location", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "alembic")))
+    cfg.set_main_option(
+        "script_location", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "alembic"))
+    )
     command.upgrade(cfg, "head")
     return async_url
 
@@ -92,7 +97,9 @@ async def db_engine(applied_migrations: str) -> AsyncIterator[Any]:
 async def db_session(app_instance: Any, db_engine: Any) -> AsyncIterator[AsyncSession]:
     # Depend on app_instance so the per-test truncate has already run before
     # the test reads the DB.
-    Session = async_sessionmaker(db_engine, expire_on_commit=False, autoflush=False, class_=AsyncSession)
+    Session = async_sessionmaker(
+        db_engine, expire_on_commit=False, autoflush=False, class_=AsyncSession
+    )
     async with Session() as session:
         yield session
         await session.rollback()
@@ -128,17 +135,91 @@ async def client(app_instance) -> AsyncIterator[AsyncClient]:
         yield ac
 
 
+CURRENT_PERIOD_END = "2099-01-01T00:00:00+00:00"
+
+
+class FakeFincodeClient:
+    """``FincodeClient`` プロトコルの最小フェイク。呼び出しを記録する。
+
+    fincode は CLAUDE.md の方針どおり自動テストから直接叩かない。このフェイクを
+    ``get_fincode_client`` に差し替えることで、各フローが fincode をいつ・どう
+    呼ぶか（あるいは呼ばないか）を検証できる。
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+        # クエリ/ボディまで検証したいテスト向けに、リクエスト全体も並行記録する
+        # （既存の ``calls`` 2タプル assert は壊さない）。
+        self.requests: list[dict[str, Any]] = []
+
+    async def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        self.calls.append((method, path))
+        self.requests.append({"method": method, "path": path, "params": params, "json": json})
+        if method == "GET" and path == "/v1/plans":
+            return {"list": []}
+        if method == "GET" and path.startswith("/v1/plans/"):
+            return {
+                "id": path.rsplit("/", 1)[-1],
+                "plan_name": "Pro",
+                "amount": "500",
+                "interval_pattern": "month",
+            }
+        if method == "POST" and path == "/v1/customers":
+            return {"id": json["id"] if json else "local_user_1"}
+        if method == "POST" and path.endswith("/cards"):
+            return {
+                "id": "card_test_1",
+                "brand": "VISA",
+                "card_no": "************4242",
+                "expire": "3012",
+                "default_flag": "1",
+            }
+        if method == "DELETE" and "/cards/" in path:
+            return {}
+        if method == "POST" and path == "/v1/subscriptions":
+            return {
+                "id": "sub_test_1",
+                "status": "ACTIVE",
+                "current_period_end": CURRENT_PERIOD_END,
+            }
+        if method == "DELETE" and path == "/v1/subscriptions/sub_test_1":
+            return {"id": "sub_test_1", "status": "CANCELED"}
+        raise AssertionError(f"unexpected fincode call: {method} {path}")
+
+    async def aclose(self) -> None:
+        pass
+
+
 @pytest_asyncio.fixture()
-async def registered_user(client: AsyncClient) -> dict[str, Any]:
-    payload = {
-        "name": "Test User",
-        "email": "alice@example.com",
-        "password": "supersecret123",
-    }
-    response = await client.post("/api/register", json=payload)
-    assert response.status_code == 201, response.text
-    data = response.json()
-    return {"token": data["access_token"], "user": data["user"], "password": payload["password"]}
+async def fake_fincode(app_instance: Any) -> FakeFincodeClient:
+    from app.api.deps import get_fincode_client
+
+    fake = FakeFincodeClient()
+    app_instance.dependency_overrides[get_fincode_client] = lambda: fake
+    return fake
+
+
+@pytest_asyncio.fixture()
+async def registered_user(db_session: AsyncSession) -> dict[str, Any]:
+    # ログイン手段は Google 認証のみなので、テスト用ユーザーは API を経由せず
+    # DB へ直接作成し、トークンも自前 JWT を直接発行する。
+    from app.core.security import create_access_token
+    from app.models.user import User
+
+    user = User(google_sub="fixture-google-sub", email="alice@example.com", name="Test User")
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    token, _ = create_access_token(user.id)
+    return {"token": token, "user": {"id": user.id, "email": user.email, "name": user.name}}
 
 
 @pytest_asyncio.fixture()

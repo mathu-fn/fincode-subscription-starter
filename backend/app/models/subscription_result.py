@@ -25,6 +25,7 @@ class SubscriptionResult(Base):
     fincode_subscription_id: Mapped[str] = mapped_column(String(128), nullable=False)
     fincode_payment_id: Mapped[str] = mapped_column(String(128), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
-    amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # server_default は migration 0003 と揃える（ORM を介さない INSERT でも挙動を一致させる）。
+    amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     charged_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     fincode_response: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)

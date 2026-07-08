@@ -8,7 +8,6 @@ import { HomePage } from "./pages/HomePage";
 import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
-import { RegisterPage } from "./pages/RegisterPage";
 
 function RootRoute() {
   const { user, loading } = useAuth();
@@ -24,7 +23,6 @@ export function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
           <Route path="/" element={<RootRoute />} />
           <Route
             path="/account"

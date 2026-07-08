@@ -17,11 +17,15 @@ tags:
   - name: カード
   - name: Webhook
 paths:
-  /api/register:
+  /api/auth/google:
     post:
       tags: [認証]
-      operationId: register
-      summary: ユーザー登録
+      operationId: googleLogin
+      summary: Google IDトークンでログインしてJWTを発行
+      description: |
+        Google Identity Services のボタンが返す ID トークン（credential）を検証し、
+        `google_sub` をキーにユーザーを find-or-create してアプリの JWT を発行します。
+        検証済みメールアドレスが既存ユーザーと衝突する場合は 409 を返します。
       security: []
       x-rateLimit: 5/min
       requestBody:
@@ -29,40 +33,18 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterRequest'
-      responses:
-        '201':
-          description: 登録成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '409':
-          $ref: '#/components/responses/ApplicationError'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-  /api/login:
-    post:
-      tags: [認証]
-      operationId: login
-      summary: ログインしてJWTを発行
-      security: []
-      x-rateLimit: 5/min
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LoginRequest'
+              $ref: '#/components/schemas/GoogleLoginRequest'
       responses:
         '200':
-          description: ログイン成功
+          description: ログイン成功（初回はユーザーを新規作成）
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/ApplicationError'
         '422':
           $ref: '#/components/responses/ValidationError'
   /api/logout:
@@ -155,9 +137,10 @@ paths:
           in: header
           required: false
           description: |
-            クライアントが生成する重複防止キー（最大 64 文字）。同じユーザ・同じキーでの再送はキーが既に成功裏に消費されていれば元の契約を冪等に返します。未指定の場合はサーバ側で UUID が生成されますが、その場合の再試行は重複契約のリスクがあります。
+            クライアントが生成する重複防止キー（1〜64 文字）。同じユーザ・同じキーでの再送はキーが既に成功裏に消費されていれば元の契約を冪等に返します。未指定の場合はサーバ側で UUID が生成されますが、その場合の再試行は重複契約のリスクがあります。
           schema:
             type: string
+            minLength: 1
             maxLength: 64
       requestBody:
         required: true
@@ -202,9 +185,10 @@ paths:
           in: header
           required: false
           description: |
-            クライアントが生成する重複防止キー（最大 64 文字）。fincode のサブスクリプション更新または作成に同じ Idempotency-Key を伝搬します。
+            クライアントが生成する重複防止キー（1〜64 文字）。fincode のサブスクリプション更新または作成に同じ Idempotency-Key を伝搬します。
           schema:
             type: string
+            minLength: 1
             maxLength: 64
       requestBody:
         required: true
@@ -398,9 +382,10 @@ paths:
       tags: [Webhook]
       operationId: fincodeWebhook
       summary: fincode webhook受信
-      description: JWT ではなく fincode の署名検証で保護します。
+      description: |
+        JWT ではなく fincode の署名検証で保護します。レート制限は課しません（送信元が
+        fincode の少数固定 IP のため。重複配信は受信テーブルと upsert の二段冪等で吸収します）。
       security: []
-      x-rateLimit: 120/min
       parameters:
         - name: Fincode-Signature
           in: header
@@ -420,14 +405,18 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
-          $ref: '#/components/responses/ApplicationError'
+          description: ペイロード不備（JSON 破損・event_id 欠落など。code=invalid_webhook_payload）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationError'
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: "`POST /api/login` で返される JWT。"
+      description: "`POST /api/auth/google` で返される JWT。"
   parameters:
     Page:
       name: page
@@ -475,29 +464,14 @@ components:
               - $ref: '#/components/schemas/ValidationError'
               - $ref: '#/components/schemas/ApplicationError'
   schemas:
-    RegisterRequest:
+    GoogleLoginRequest:
       type: object
-      required: [name, email, password]
+      required: [credential]
       properties:
-        name:
+        credential:
           type: string
-          maxLength: 255
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-          minLength: 8
-    LoginRequest:
-      type: object
-      required: [email, password]
-      properties:
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-          format: password
+          minLength: 1
+          description: Google Identity Services が返す ID トークン。
     AuthResponse:
       type: object
       required: [access_token, token_type, expires_at, user]

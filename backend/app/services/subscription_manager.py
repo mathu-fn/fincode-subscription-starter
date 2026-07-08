@@ -101,6 +101,9 @@ class SubscriptionManager(BaseManager):
         return (await db.execute(stmt)).scalar_one_or_none()
 
     async def _finalize_elapsed_cancellations(self, db: AsyncSession, user: User) -> None:
+        # 期間満了による cancelled への遅延確定はシステム主導の機械的遷移であり、
+        # 意図的に監査ログを書かない。ユーザー操作としての解約（予約）は cancel() が
+        # 監査済みで、確定時刻は current_period_end として同レコードから追跡できる。
         now = datetime.now(UTC)
         stmt = select(Subscription).where(
             Subscription.user_id == user.id,
@@ -132,10 +135,10 @@ class SubscriptionManager(BaseManager):
         if card is None or card.deleted_at is not None or card.user_id != user.id:
             raise NotFoundError("Card not found.", code="card_not_found")
 
-        # カードの月境界は fincode（日本のサービス）が課金判定する JST で解釈する。
-        # UTC だと月替わりの最大 9 時間、期限切れカードを有効と誤判定する。
-        now = datetime.now(FINCODE_TIMEZONE)
+        # fincode の日付境界は JST で解釈されるため、有効期限の年月判定も JST 基準で行う。
+        # UTC 基準だと月替わりの前後最大 9 時間、判定が fincode とずれる。
         # exp_year は 4 桁で保存される。
+        now = datetime.now(FINCODE_TIMEZONE)
         if (card.exp_year, card.exp_month) < (now.year, now.month):
             raise UnprocessableError(code="expired_card")
         return card
@@ -156,6 +159,9 @@ class SubscriptionManager(BaseManager):
         # これがなければ、レスポンスが途中で失われた後のクライアントリトライが
         # 新しいノンスで fincode に到達し、新しい Idempotency-Key で重複契約
         # （二重請求）を作成してしまう。
+        # 注意: リプレイは plan_id を照合しない。同じキーで別プランを送った場合も
+        # 以前成功した行をそのまま返す（Idempotency-Key の意味論として正しい。
+        # キーの使い回しはクライアント側のバグであり、ここで隠蔽も昇格もしない）。
         if idempotency_key is not None:
             prior = await db.scalar(
                 select(Subscription).where(
@@ -249,6 +255,9 @@ class SubscriptionManager(BaseManager):
             raise NotFoundError(code="subscription_not_found")
         if cancel_at_period_end(sub):
             raise ConflictError(code="subscription_cancel_scheduled")
+        # 同一プランへの変更は no-op で現行契約を返す。成功後のクライアント再送も
+        # このガードに吸収されるため、change_plan は結果的にリトライ安全になる
+        # （途中失敗からの再送は fincode 側の Idempotency-Key が二重作成を防ぐ）。
         if sub.fincode_plan_id == plan_id:
             return sub
 
@@ -261,6 +270,10 @@ class SubscriptionManager(BaseManager):
         }
 
         if plan_id == FREE_PLAN_ID:
+            # 有料→フリーは fincode 契約を解約し、当期の残りを待たず即時にフリーへ
+            # 切り替える（cancel() の期間末解約と異なる意図的な仕様。fincode に日割りは
+            # 無く、既払い期間を保持したままプランだけ差し替えると「フリーなのに有料の
+            # 期限を持つ」中間状態が生まれ、履歴と snapshot の説明可能性が壊れるため）。
             if sub.fincode_subscription_id is not None:
                 await self._subs.cancel(fincode_subscription_id=sub.fincode_subscription_id)
             _apply_plan_snapshot(sub, FREE_PLAN)
@@ -360,16 +373,34 @@ class SubscriptionManager(BaseManager):
             raise NotFoundError(code="subscription_not_found")
         if cancel_at_period_end(sub):
             return sub
-        if sub.fincode_subscription_id is None:
-            sub.status = SubscriptionStatus.CANCELLED
-            sub.cancelled_at = datetime.now(UTC)
-            await db.flush()
-            return sub
-
         before = {
             "status": sub.status,
             "cancel_at_period_end": False,
         }
+
+        # フリープラン（fincode 契約なし）はローカルで即時解約する。fincode 解約と同様に
+        # 成功した業務操作なので、監査ログは有料パスと同じ形で必ず残す。
+        if sub.fincode_subscription_id is None:
+            sub.status = SubscriptionStatus.CANCELLED
+            sub.cancelled_at = datetime.now(UTC)
+            await db.flush()
+            await self._audit.record(
+                db,
+                user_id=user.id,
+                event="subscription.cancel",
+                auditable_type=self.auditable_type,
+                auditable_id=sub.id,
+                before=before,
+                after={
+                    "status": sub.status,
+                    "cancel_at_period_end": False,
+                    "cancelled_at": sub.cancelled_at.isoformat(),
+                    "current_period_end": (
+                        sub.current_period_end.isoformat() if sub.current_period_end else None
+                    ),
+                },
+            )
+            return sub
         raw = await self._subs.cancel(fincode_subscription_id=sub.fincode_subscription_id)
         apply_current_period_end(sub, raw, only_extend=True)
         sub.cancelled_at = datetime.now(UTC)

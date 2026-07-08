@@ -11,7 +11,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -19,16 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import SubscriptionStatus
 from app.models.subscription import Subscription
-from tests.test_subscription import FakeFincodeClient
-
-
-@pytest_asyncio.fixture()
-async def fake_fincode(app_instance) -> FakeFincodeClient:
-    from app.api.deps import get_fincode_client
-
-    fake = FakeFincodeClient()
-    app_instance.dependency_overrides[get_fincode_client] = lambda: fake
-    return fake
+from tests.conftest import FakeFincodeClient
 
 
 async def _create_unpaid_subscription(

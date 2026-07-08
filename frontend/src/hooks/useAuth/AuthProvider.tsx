@@ -48,21 +48,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const response = await apiFetch<AuthResponse>("/api/login", {
+  const loginWithGoogle = useCallback(async (credential: string) => {
+    const response = await apiFetch<AuthResponse>("/api/auth/google", {
       method: "POST",
-      body: JSON.stringify({ email, password })
-    });
-    setToken(response.access_token);
-    setUser(response.user);
-    setUserState(response.user);
-    return response.user;
-  }, []);
-
-  const register = useCallback(async (name: string, email: string, password: string) => {
-    const response = await apiFetch<AuthResponse>("/api/register", {
-      method: "POST",
-      body: JSON.stringify({ name, email, password })
+      body: JSON.stringify({ credential })
     });
     setToken(response.access_token);
     setUser(response.user);
@@ -80,7 +69,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserState(null);
   }, []);
 
-  const value = useMemo<AuthContextValue>(() => ({ user, loading, login, register, logout, refresh }), [user, loading, login, register, logout, refresh]);
+  const value = useMemo<AuthContextValue>(
+    () => ({ user, loading, loginWithGoogle, logout, refresh }),
+    [user, loading, loginWithGoogle, logout, refresh]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

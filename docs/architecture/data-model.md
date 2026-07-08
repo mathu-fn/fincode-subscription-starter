@@ -20,7 +20,7 @@ erDiagram
     users {
         bigint id PK
         string email UK
-        string password_hash
+        string google_sub UK
         string name
         datetime created_at
         datetime updated_at
@@ -87,7 +87,7 @@ erDiagram
 
 ## 各テーブルの意図
 
-`users` はアプリ側のアイデンティティとパスワードハッシュを保持します。パスワードは passlib や pwdlib などのPython向けライブラリで bcrypt/argon2 を使って保存します。
+`users` はアプリ側のアイデンティティを保持します。認証は Google ログインのみで、Google の subject 識別子（`google_sub`、unique）をキーに find-or-create します。パスワードハッシュは保持しません。
 
 `fincode_customers` は、ローカルユーザーと fincode customer ID を 1:1 で対応させます。初回のカード登録または契約操作のときに、必要になった時点で作成します。
 

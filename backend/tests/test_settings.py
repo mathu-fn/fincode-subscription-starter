@@ -31,6 +31,16 @@ def test_production_rejects_default_secrets() -> None:
         )
 
 
+def test_production_requires_google_client_id() -> None:
+    with pytest.raises(ValidationError, match="GOOGLE_CLIENT_ID"):
+        Settings(
+            app_env="production",
+            jwt_secret_key="test-secret-key-please-change-very-long-string",
+            fincode_webhook_secret="test-webhook-secret",
+            google_client_id="",
+        )
+
+
 def test_rate_limit_key_prefers_authenticated_user() -> None:
     request = SimpleNamespace(
         state=SimpleNamespace(user=SimpleNamespace(id=123)),

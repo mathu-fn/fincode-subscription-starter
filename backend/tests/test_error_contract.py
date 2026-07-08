@@ -107,6 +107,12 @@ from app.core.exceptions import (
             401,
             "Webhook signature verification failed.",
         ),
+        (
+            UnprocessableError(code="invalid_webhook_payload"),
+            "invalid_webhook_payload",
+            422,
+            "Webhook payload is malformed or missing required fields.",
+        ),
     ],
 )
 def test_business_error_contract(

@@ -11,10 +11,12 @@ ERROR_DEFAULTS: dict[str, str] = {
     "subscription_not_found": "No active subscription was found.",
     "forbidden": "You cannot access this resource.",
     "invalid_credentials": "Invalid email or password.",
+    "invalid_google_token": "Google sign-in could not be verified.",
+    "google_email_not_verified": "The Google account email address is not verified.",
     "unauthenticated": "Authentication is required.",
     "token_expired": "Token expired.",
     "invalid_token": "Invalid token.",
     "email_already_registered": "This email is already registered.",
     "invalid_webhook_signature": "Webhook signature verification failed.",
-    "invalid_webhook_payload": "Webhook payload is not valid JSON.",
+    "invalid_webhook_payload": "Webhook payload is malformed or missing required fields.",
 }

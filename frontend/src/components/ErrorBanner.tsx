@@ -1,8 +1,10 @@
 import type { ApiError } from "../lib/apiClient";
 
 const codeLabels: Record<string, string> = {
-  invalid_credentials: "メールアドレスかパスワードが正しくありません。",
-  email_already_registered: "このメールアドレスはすでに登録されています。",
+  invalid_credentials: "認証情報が正しくありません。もう一度ログインしてください。",
+  invalid_google_token: "Google ログインに失敗しました。もう一度お試しください。",
+  google_email_not_verified: "Google アカウントのメールアドレスが未確認のためログインできません。",
+  email_already_registered: "このメールアドレスは既存のアカウントで使用されています。",
   active_subscription_exists: "すでに有効なサブスクリプションがあります。",
   card_in_use: "アクティブな契約で利用中のカードは削除できません。",
   card_not_found: "対象のカードが見つかりません。",
