@@ -52,7 +52,8 @@ docs: document subscription status response
 
 このリポジトリは [release-please](https://github.com/googleapis/release-please) でバージョン管理を自動化しています。コミットメッセージは Conventional Commits 互換である必要があります。
 
-- GitHub Flow + squash merge では **PR のタイトル** が main 上のコミットメッセージになる。プレフィックスは必ず PR タイトルに付ける。
+- トピックブランチ → `develop` の squash merge では **PR のタイトル** が develop 上のコミットメッセージになる。プレフィックスは必ず PR タイトルに付ける。
+- `develop` → `main` のリリース PR は **squash しない**（マージコミット）。squash すると個々の `feat:` / `fix:` が潰れ、release-please のバンプと CHANGELOG が壊れる。詳細は `docs/architecture/branching.md`。
 - `feat:` → pre-1.0 では minor バンプ、1.0 以降は minor バンプ
 - `fix:` → patch バンプ
 - `security:` → CHANGELOG の "Security" セクションに表示（バンプ規則は patch 相当）

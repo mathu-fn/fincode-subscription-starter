@@ -36,7 +36,7 @@ cd frontend && npm install && npm run dev
 
 ## ブランチとコミット
 
-- **ブランチ戦略**: GitHub Flow。`main` は常にデプロイ可能。短命なトピックブランチを切り、PR で squash merge。詳細は [`docs/architecture/branching.md`](./docs/architecture/branching.md)。
+- **ブランチ戦略**: develop ベースの簡易 Git Flow。`develop` から `feature/xxx` などのトピックブランチを切り、PR で `develop` へ squash merge。リリース時に `develop` → `main` をマージコミットで取り込む。詳細は [`docs/architecture/branching.md`](./docs/architecture/branching.md)。
 - **コミットプレフィックス**: `feat / fix / docs / test / refactor / chore / security`。詳細は [`docs/architecture/commit-guidelines.md`](./docs/architecture/commit-guidelines.md)。
 - **コミット粒度**: API 契約 (`docs/api/openapi.yml`) / React UI / SQLAlchemy・Alembic スキーマ / fincode 連携 / テストは独立してリバート可能になるように分けてください。
 
@@ -62,7 +62,7 @@ npx @redocly/cli lint docs/api/openapi.yml
 
 PR を出す前に確認してください。
 
-- [ ] `main` から切ったトピックブランチで作業している
+- [ ] `develop` から切ったトピックブランチで作業しており、PR のベースが `develop` になっている
 - [ ] コミットがプレフィックス規約に従い、粒度が分かれている
 - [ ] 上記「ローカルで通すもの」がすべて成功している
 - [ ] API 契約を変更した場合 `docs/api/openapi.yml` を更新し、Redocly lint が通る
@@ -87,8 +87,8 @@ PR を出す前に確認してください。
 
 バージョン管理は [release-please](https://github.com/googleapis/release-please) で自動化しています。仕組み:
 
-1. **コミットメッセージが Conventional Commits 準拠であること**。GitHub Flow + squash merge では **PR のタイトル** が main 上のコミットメッセージになるため、PR タイトルを `feat:` / `fix:` / `security:` などのプレフィックスで始めること（[コミットガイドライン](./docs/architecture/commit-guidelines.md)）。
-2. main へマージするたびに release-please のワークフロー（`.github/workflows/release-please.yml`）が走り、**Release PR** を自動で作成・更新する。`CHANGELOG.md`、`backend/pyproject.toml`、`frontend/package.json` のバージョンがその PR で同期更新される。
+1. **コミットメッセージが Conventional Commits 準拠であること**。トピックブランチ → `develop` の squash merge では **PR のタイトル** が develop 上のコミットメッセージになるため、PR タイトルを `feat:` / `fix:` / `security:` などのプレフィックスで始めること（[コミットガイドライン](./docs/architecture/commit-guidelines.md)）。
+2. リリース時に `develop` → `main` の PR を**マージコミット**（squash しない）で取り込むと、release-please のワークフロー（`.github/workflows/release-please.yml`）が develop 由来の個々のコミットを読んで **Release PR** を自動で作成・更新する。`CHANGELOG.md`、`backend/pyproject.toml`、`frontend/package.json` のバージョンがその PR で同期更新される。
 3. Release PR を **マージすると GitHub Release とタグ（`vX.Y.Z`）が自動作成される**。
 
 ### バージョン番号の決まり方

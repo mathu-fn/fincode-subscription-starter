@@ -26,7 +26,7 @@
 | [architecture/data-model.md](./architecture/data-model.md) | ERモデル、各テーブルの意図、削除方針、外部キー |
 | [architecture/error-handling.md](./architecture/error-handling.md) | 例外階層、Circuit Breaker、HTTPマッピング、再試行方針 |
 | [architecture/commit-guidelines.md](./architecture/commit-guidelines.md) | コミット粒度・プレフィックス規約 |
-| [architecture/branching.md](./architecture/branching.md) | ブランチ運用（GitHub Flow）、PR フロー、main 保護設定 |
+| [architecture/branching.md](./architecture/branching.md) | ブランチ運用（develop ベースの簡易 Git Flow）、PR フロー、ブランチ保護設定 |
 
 ## APIリファレンス
 
