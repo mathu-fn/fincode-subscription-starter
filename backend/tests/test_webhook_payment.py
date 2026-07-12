@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,14 +14,7 @@ from app.models.subscription import Subscription
 from app.models.subscription_result import SubscriptionResult
 from app.services.fincode.webhook_handler import FincodeWebhookHandler
 from app.services.subscription_periods import as_utc
-
-WEBHOOK_SECRET = "test-webhook-secret"
-
-
-def _signed_payload(payload: dict[str, Any]) -> tuple[bytes, str]:
-    body = json.dumps(payload).encode()
-    signature = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
-    return body, signature
+from tests.conftest import WEBHOOK_SECRET, signed_payload
 
 
 def _make_subscription(
@@ -48,7 +40,7 @@ def _make_subscription(
 
 
 async def _handle(db_session, payload: dict[str, Any]) -> None:
-    body, signature = _signed_payload(payload)
+    body, signature = signed_payload(payload)
     await FincodeWebhookHandler(WEBHOOK_SECRET).handle(
         payload=body, signature=signature, db=db_session
     )
@@ -56,17 +48,11 @@ async def _handle(db_session, payload: dict[str, Any]) -> None:
 
 async def test_payment_failed_with_uppercase_status_sets_unpaid(
     db_session,
-    registered_user: dict[str, Any],
+    subscribed_user: dict[str, Any],
 ) -> None:
     # fincode の生 status は "CAPTURED" / "CANCELED" のような独自の大文字文字列。
     # 成否判定はイベント名を正とし、生値は fincode_response にのみ残す。
-    sub = _make_subscription(
-        registered_user,
-        fincode_subscription_id="sub_pay_failed_upper",
-        status=SubscriptionStatus.ACTIVE,
-    )
-    db_session.add(sub)
-    await db_session.commit()
+    sub = subscribed_user["subscription"]
 
     await _handle(
         db_session,
@@ -74,7 +60,7 @@ async def test_payment_failed_with_uppercase_status_sets_unpaid(
             "event_id": "evt_pay_failed_upper",
             "event": "subscription.payment.failed",
             "data": {
-                "subscription_id": "sub_pay_failed_upper",
+                "subscription_id": sub.fincode_subscription_id,
                 "payment_id": "pay_failed_upper",
                 "amount": "500",
                 "status": "CANCELED",
@@ -244,23 +230,17 @@ async def test_payment_failed_keeps_cancelled_subscription(
 
 async def test_duplicate_event_id_is_ignored(
     db_session,
-    registered_user: dict[str, Any],
+    subscribed_user: dict[str, Any],
 ) -> None:
     # 二段冪等の第 1 段: 同一 event_id の再送は webhook_events_seen の UNIQUE 違反で
     # 検知し、業務処理へ入らず ACK する。状態遷移も結果行も二重適用されない。
-    sub = _make_subscription(
-        registered_user,
-        fincode_subscription_id="sub_dedup",
-        status=SubscriptionStatus.ACTIVE,
-    )
-    db_session.add(sub)
-    await db_session.commit()
+    sub = subscribed_user["subscription"]
 
     payload = {
         "event_id": "evt_dedup_1",
         "event": "subscription.payment.failed",
         "data": {
-            "subscription_id": "sub_dedup",
+            "subscription_id": sub.fincode_subscription_id,
             "payment_id": "pay_dedup",
             "amount": "500",
             "status": "CANCELED",
@@ -296,7 +276,7 @@ async def test_duplicate_event_id_is_ignored(
 async def test_missing_event_id_is_unprocessable_not_unauthorized(db_session) -> None:
     # 署名は正しいが event_id が無いペイロード。重複排除キーが無く安全に処理できない
     # ため 422 (invalid_webhook_payload) で fincode に差し戻す。署名不正 (401) とは区別する。
-    body, signature = _signed_payload({"event": "subscription.payment.succeeded", "data": {}})
+    body, signature = signed_payload({"event": "subscription.payment.succeeded", "data": {}})
     with pytest.raises(UnprocessableError) as exc_info:
         await FincodeWebhookHandler(WEBHOOK_SECRET).handle(
             payload=body, signature=signature, db=db_session
@@ -317,17 +297,11 @@ async def test_invalid_json_payload_raises_unprocessable(db_session) -> None:
 
 async def test_charged_at_parsed_from_fincode_process_date(
     db_session,
-    registered_user: dict[str, Any],
+    subscribed_user: dict[str, Any],
 ) -> None:
     # fincode の process_date はスラッシュ区切りの JST。受信時刻ではなく
     # 実課金日時が UTC に変換されて保存される（履歴 API のソートキー）。
-    sub = _make_subscription(
-        registered_user,
-        fincode_subscription_id="sub_charged_at",
-        status=SubscriptionStatus.ACTIVE,
-    )
-    db_session.add(sub)
-    await db_session.commit()
+    sub = subscribed_user["subscription"]
 
     await _handle(
         db_session,
@@ -335,7 +309,7 @@ async def test_charged_at_parsed_from_fincode_process_date(
             "event_id": "evt_charged_at",
             "event": "subscription.payment.succeeded",
             "data": {
-                "subscription_id": "sub_charged_at",
+                "subscription_id": sub.fincode_subscription_id,
                 "payment_id": "pay_charged_at",
                 "amount": "500",
                 "status": "CAPTURED",
@@ -354,20 +328,14 @@ async def test_charged_at_parsed_from_fincode_process_date(
 
 async def test_payment_webhook_upsert_is_idempotent(
     db_session,
-    registered_user: dict[str, Any],
+    subscribed_user: dict[str, Any],
 ) -> None:
     # 同一 (fincode_subscription_id, fincode_payment_id) の再送は event_id が違っても
     # 結果行を増やさず更新する（二段冪等の upsert 側）。
-    sub = _make_subscription(
-        registered_user,
-        fincode_subscription_id="sub_pay_idem",
-        status=SubscriptionStatus.ACTIVE,
-    )
-    db_session.add(sub)
-    await db_session.commit()
+    sub = subscribed_user["subscription"]
 
     base_data = {
-        "subscription_id": "sub_pay_idem",
+        "subscription_id": sub.fincode_subscription_id,
         "payment_id": "pay_idem",
         "amount": "500",
         "status": "FAILED",

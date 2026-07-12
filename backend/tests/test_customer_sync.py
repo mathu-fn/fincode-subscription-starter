@@ -17,23 +17,7 @@ from app.core.exceptions import FincodeApiError, FincodeServerError
 from app.models.fincode_customer import FincodeCustomer
 from app.models.user import User
 from app.services.customer_sync_service import CustomerSyncService
-
-
-class _FakeFincodeClient:
-    async def request(
-        self,
-        method: str,
-        path: str,
-        *,
-        json: dict[str, Any] | None = None,
-        params: dict[str, str] | None = None,
-        idempotency_key: str | None = None,
-    ) -> dict[str, Any]:
-        assert method == "POST" and path == "/v1/customers"
-        return {"id": json["id"] if json else "local_user_x"}
-
-    async def aclose(self) -> None:
-        pass
+from tests.conftest import FakeFincodeClient
 
 
 async def test_ensure_recovers_from_concurrent_insert(
@@ -62,7 +46,7 @@ async def test_ensure_recovers_from_concurrent_insert(
 
     monkeypatch.setattr(db_session, "scalar", scalar_with_stale_first_read)
 
-    service = CustomerSyncService(_FakeFincodeClient())
+    service = CustomerSyncService(FakeFincodeClient())
     customer = await service.ensure(db_session, user)
 
     # IntegrityError を握りつぶさず勝者の行へ回復している。
