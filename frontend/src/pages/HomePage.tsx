@@ -11,22 +11,15 @@ import { useAuth } from "../hooks/useAuth";
 import { apiFetch, ApiError } from "../lib/apiClient";
 import { FincodeUiBundle, initFincodeUi, mountFincodeUi, tokenizeViaUi, unmountFincodeUi } from "../lib/fincodeJs";
 import { isFincodeMockMode } from "../lib/fincodeMode";
+import { formatCardLabel, formatCardLabelWithExpiry, formatDateTime, formatPlanPrice } from "../lib/format";
 import { inputClass, labelClass, pageClass, primaryLinkClass, sectionClass, summaryCardClass } from "../lib/styles";
 import type { Subscription, Plan, Card, HistoryItem, PaginatedBillingHistory } from "../types/api";
+import type { AppError } from "../types/ui";
 
 const FINCODE_MOUNT_ID = "fincode-ui-mount";
 const PER_PAGE = 10;
 // 0円フリープランの番兵ID（バックエンドの FREE_PLAN_ID と一致）。
 const FREE_PLAN_ID = "free";
-
-function formatPlanPrice(amount: number, interval: string): string {
-  if (amount === 0) return "無料";
-  return `¥${amount.toLocaleString()} / ${interval}`;
-}
-
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString("ja-JP");
-}
 
 function cancelDialogDescription(sub: NonNullable<Subscription>): string {
   if (sub.fincode_subscription_id && sub.current_period_end) {
@@ -60,7 +53,7 @@ export function HomePage() {
   const [history, setHistory] = useState<PaginatedBillingHistory | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [latestHistory, setLatestHistory] = useState<HistoryItem | null>(null);
-  const [error, setError] = useState<ApiError | Error | null>(null);
+  const [error, setError] = useState<AppError>(null);
   const fincodeRef = useRef<FincodeUiBundle | null>(null);
 
   const refreshSubscription = useCallback(async () => {
@@ -335,7 +328,7 @@ export function HomePage() {
                 {cards.length} 枚
               </strong>
               <small className="text-sm text-slate-500">
-                {selectedCard ? `${selectedCard.brand} **** ${selectedCard.last4}` : "支払いカードを追加できます"}
+                {selectedCard ? formatCardLabel(selectedCard) : "支払いカードを追加できます"}
               </small>
             </>
           )}
@@ -353,7 +346,7 @@ export function HomePage() {
                 {latestHistory ? `¥${latestHistory.amount.toLocaleString()}` : "履歴なし"}
               </strong>
               <small className="text-sm text-slate-500">
-                {latestHistory ? new Date(latestHistory.charged_at).toLocaleString("ja-JP") : "決済後に表示されます"}
+                {latestHistory ? formatDateTime(latestHistory.charged_at) : "決済後に表示されます"}
               </small>
             </>
           )}
@@ -462,7 +455,7 @@ export function HomePage() {
                 >
                   {cards.map((card) => (
                     <option key={card.id} value={card.id}>
-                      {card.brand} **** {card.last4} ({card.exp_month}/{card.exp_year})
+                      {formatCardLabelWithExpiry(card)}
                     </option>
                   ))}
                 </select>
@@ -553,7 +546,7 @@ export function HomePage() {
               {cards.map((card) => (
                 <li key={card.id} className="flex items-center justify-between gap-3 bg-sky-50 px-4 py-3">
                   <span className="text-sm font-medium text-slate-800">
-                    {card.brand} **** {card.last4} ({card.exp_month}/{card.exp_year})
+                    {formatCardLabelWithExpiry(card)}
                   </span>
                   <LoadingButton
                     type="button"
@@ -733,7 +726,7 @@ export function HomePage() {
         title="カードを削除しますか？"
         description={
           cardPendingDelete
-            ? `${cardPendingDelete.brand} **** ${cardPendingDelete.last4} を削除します。`
+            ? `${formatCardLabel(cardPendingDelete)} を削除します。`
             : undefined
         }
         confirmLabel="削除"

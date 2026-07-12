@@ -1,4 +1,5 @@
 import type { ApiError } from "../lib/apiClient";
+import type { AppError } from "../types/ui";
 
 const codeLabels: Record<string, string> = {
   invalid_credentials: "認証情報が正しくありません。もう一度ログインしてください。",
@@ -22,7 +23,7 @@ const codeLabels: Record<string, string> = {
   fincode_unavailable: "決済サービスが一時的に利用できません。"
 };
 
-export function ErrorBanner({ error }: { error: ApiError | Error | null }) {
+export function ErrorBanner({ error }: { error: AppError }) {
   if (!error) return null;
   const code = "code" in error ? (error as ApiError).code : "error";
   const label = codeLabels[code] ?? error.message;
