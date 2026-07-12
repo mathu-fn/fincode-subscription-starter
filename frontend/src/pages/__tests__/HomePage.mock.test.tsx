@@ -1,9 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { HomePage } from "../HomePage";
+import { mockApiFetch } from "../../test/mockApi";
+import { renderHomePage } from "../../test/renderHomePage";
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn(),
@@ -37,15 +37,7 @@ vi.mock("../../hooks/useAuth", () => ({
 beforeEach(() => {
   // VITE_FINCODE_MODE=mock を有効化（isFincodeMockMode() が true を返す）。
   vi.stubEnv("VITE_FINCODE_MODE", "mock");
-  mocks.apiFetch.mockImplementation((path: string) => {
-    if (path === "/api/subscription") return Promise.resolve(null);
-    if (path === "/api/subscription/plans") return Promise.resolve([]);
-    if (path === "/api/subscription/cards") return Promise.resolve([]);
-    if (path.startsWith("/api/subscription/history")) {
-      return Promise.resolve({ data: [], page: 1, per_page: 10, total: 0 });
-    }
-    return Promise.resolve(null);
-  });
+  mocks.apiFetch.mockImplementation(mockApiFetch());
   mocks.initFincodeUi.mockReset();
 });
 
@@ -55,11 +47,7 @@ afterEach(() => {
 
 describe("HomePage cards section (mock mode)", () => {
   it("shows a direct token input instead of the fincode UI and never loads fincode.js", async () => {
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>
-    );
+    renderHomePage();
 
     await userEvent.click(screen.getByRole("button", { name: "カードを追加" }));
 
@@ -70,11 +58,7 @@ describe("HomePage cards section (mock mode)", () => {
   });
 
   it("posts the entered token to the cards endpoint without calling fincode.js tokenization", async () => {
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>
-    );
+    renderHomePage();
 
     await userEvent.click(screen.getByRole("button", { name: "カードを追加" }));
     await userEvent.click(screen.getByRole("button", { name: "カードを追加" }));

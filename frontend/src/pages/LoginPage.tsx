@@ -6,6 +6,7 @@ import { useAuth } from "../hooks/useAuth";
 import { ApiError } from "../lib/apiClient";
 import { initGoogleIdentity, renderGoogleButton } from "../lib/googleIdentity";
 import { authFormClass } from "../lib/styles";
+import type { AppError } from "../types/ui";
 
 export function LoginPage() {
   const { loginWithGoogle } = useAuth();
@@ -14,7 +15,7 @@ export function LoginPage() {
   const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? "/";
 
   const buttonRef = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<ApiError | Error | null>(null);
+  const [error, setError] = useState<AppError>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const onCredential = useCallback(

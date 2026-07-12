@@ -84,5 +84,3 @@ export async function apiFetch<T = unknown>(
 
   return body as T;
 }
-
-export const apiBaseUrl = BASE_URL;

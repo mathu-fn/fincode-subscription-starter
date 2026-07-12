@@ -1,9 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { HomePage } from "../HomePage";
+import { buildCard, buildHistoryItem, buildHistoryPage, buildPlan, buildSubscription } from "../../test/fixtures";
+import { mockApiFetch } from "../../test/mockApi";
+import { renderHomePage } from "../../test/renderHomePage";
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn(),
@@ -34,15 +35,7 @@ vi.mock("../../hooks/useAuth", () => ({
 }));
 
 beforeEach(() => {
-  mocks.apiFetch.mockImplementation((path: string) => {
-    if (path === "/api/subscription") return Promise.resolve(null);
-    if (path === "/api/subscription/plans") return Promise.resolve([]);
-    if (path === "/api/subscription/cards") return Promise.resolve([]);
-    if (path.startsWith("/api/subscription/history")) {
-      return Promise.resolve({ data: [], page: 1, per_page: 10, total: 0 });
-    }
-    return Promise.resolve(null);
-  });
+  mocks.apiFetch.mockImplementation(mockApiFetch());
   mocks.initFincodeUi.mockResolvedValue({ fincode: {}, ui: {} });
   mocks.mountFincodeUi.mockReset();
   mocks.unmountFincodeUi.mockReset();
@@ -50,11 +43,7 @@ beforeEach(() => {
 
 describe("HomePage cards section", () => {
   it("hides the card form until the user clicks the add-card button, then mounts the fincode UI", async () => {
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>
-    );
+    renderHomePage();
 
     expect(screen.queryByText("新規カードを追加")).not.toBeInTheDocument();
     expect(document.getElementById("fincode-ui-mount")).not.toBeInTheDocument();
@@ -85,11 +74,7 @@ describe("HomePage cards section", () => {
       })
     );
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>
-    );
+    renderHomePage();
 
     await userEvent.click(screen.getByRole("button", { name: "カードを追加" }));
 
@@ -106,42 +91,21 @@ describe("HomePage cards section", () => {
   });
 
   it("renders subscription and payment statuses as localized badges, with raw fallback for unknown values", async () => {
-    mocks.apiFetch.mockImplementation((path: string) => {
-      if (path === "/api/subscription") {
-        return Promise.resolve({
-          id: 1,
-          status: "active",
+    mocks.apiFetch.mockImplementation(
+      mockApiFetch({
+        "/api/subscription": buildSubscription({
           plan_name: "スタンダード",
-          plan_amount: 980,
-          plan_interval: "month",
-          cancelled_at: null,
-          current_period_end: null,
-          cancel_at_period_end: false,
-          created_at: "2026-01-01T00:00:00Z"
-        });
-      }
-      if (path === "/api/subscription/plans") return Promise.resolve([]);
-      if (path === "/api/subscription/cards") return Promise.resolve([]);
-      if (path.startsWith("/api/subscription/history")) {
-        return Promise.resolve({
-          data: [
-            { id: 1, status: "succeeded", amount: 980, fincode_payment_id: "pay_1", charged_at: "2026-02-01T00:00:00Z" },
-            { id: 2, status: "failed", amount: 980, fincode_payment_id: "pay_2", charged_at: "2026-03-01T00:00:00Z" },
-            { id: 3, status: "authorized", amount: 980, fincode_payment_id: "pay_3", charged_at: "2026-04-01T00:00:00Z" }
-          ],
-          page: 1,
-          per_page: 10,
-          total: 3
-        });
-      }
-      return Promise.resolve(null);
-    });
-
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>
+          plan_amount: 980
+        }),
+        "/api/subscription/history": buildHistoryPage([
+          buildHistoryItem({ id: 1, status: "succeeded", fincode_payment_id: "pay_1", charged_at: "2026-02-01T00:00:00Z" }),
+          buildHistoryItem({ id: 2, status: "failed", fincode_payment_id: "pay_2", charged_at: "2026-03-01T00:00:00Z" }),
+          buildHistoryItem({ id: 3, status: "authorized", fincode_payment_id: "pay_3", charged_at: "2026-04-01T00:00:00Z" })
+        ])
+      })
     );
+
+    renderHomePage();
 
     // 契約状態は日本語ラベルになる（生の "active" は表示されない）。
     await waitFor(() => {
@@ -158,52 +122,21 @@ describe("HomePage cards section", () => {
   });
 
   it("shows cancel-at-period-end state and blocks further cancellation or plan changes", async () => {
-    mocks.apiFetch.mockImplementation((path: string) => {
-      if (path === "/api/subscription") {
-        return Promise.resolve({
-          id: 1,
-          status: "active",
-          fincode_subscription_id: "sub_mock_1",
-          fincode_plan_id: "plan_mock_basic",
-          plan_name: "ベーシック",
-          plan_amount: 500,
-          plan_interval: "month",
+    mocks.apiFetch.mockImplementation(
+      mockApiFetch({
+        "/api/subscription": buildSubscription({
           cancelled_at: "2026-01-15T00:00:00Z",
           current_period_end: "2026-02-01T00:00:00Z",
-          cancel_at_period_end: true,
-          created_at: "2026-01-01T00:00:00Z"
-        });
-      }
-      if (path === "/api/subscription/plans") {
-        return Promise.resolve([
-          {
-            fincode_plan_id: "plan_mock_basic",
-            name: "ベーシック",
-            amount: 500,
-            currency: "JPY",
-            interval: "month"
-          },
-          {
-            fincode_plan_id: "plan_mock_pro",
-            name: "プロ",
-            amount: 1500,
-            currency: "JPY",
-            interval: "month"
-          }
-        ]);
-      }
-      if (path === "/api/subscription/cards") return Promise.resolve([]);
-      if (path.startsWith("/api/subscription/history")) {
-        return Promise.resolve({ data: [], page: 1, per_page: 10, total: 0 });
-      }
-      return Promise.resolve(null);
-    });
-
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>
+          cancel_at_period_end: true
+        }),
+        "/api/subscription/plans": [
+          buildPlan(),
+          buildPlan({ fincode_plan_id: "plan_mock_pro", name: "プロ", amount: 1500 })
+        ]
+      })
     );
+
+    renderHomePage();
 
     await waitFor(() => {
       expect(screen.getAllByText("解約予約中").length).toBeGreaterThan(0);
@@ -214,32 +147,13 @@ describe("HomePage cards section", () => {
   });
 
   it("confirms card deletion via the ConfirmDialog instead of window.confirm", async () => {
-    mocks.apiFetch.mockImplementation((path: string) => {
-      if (path === "/api/subscription") return Promise.resolve(null);
-      if (path === "/api/subscription/plans") return Promise.resolve([]);
-      if (path === "/api/subscription/cards") {
-        return Promise.resolve([
-          {
-            id: 77,
-            brand: "VISA",
-            last4: "4242",
-            exp_month: 12,
-            exp_year: 2030,
-            created_at: "2026-01-01T00:00:00Z"
-          }
-        ]);
-      }
-      if (path.startsWith("/api/subscription/history")) {
-        return Promise.resolve({ data: [], page: 1, per_page: 10, total: 0 });
-      }
-      return Promise.resolve(null);
-    });
-
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>
+    mocks.apiFetch.mockImplementation(
+      mockApiFetch({
+        "/api/subscription/cards": [buildCard()]
+      })
     );
+
+    renderHomePage();
 
     // カード一覧が読み込まれるまで待つ。この時点では削除ボタンは1つだけ。
     const deleteButton = await screen.findByRole("button", { name: "削除" });
@@ -262,52 +176,17 @@ describe("HomePage cards section", () => {
   });
 
   it("treats an unpaid subscription as the current subscription (badge, plan change button, cancel button)", async () => {
-    mocks.apiFetch.mockImplementation((path: string) => {
-      if (path === "/api/subscription") {
-        return Promise.resolve({
-          id: 1,
-          status: "unpaid",
-          fincode_subscription_id: "sub_mock_1",
-          fincode_plan_id: "plan_mock_basic",
-          plan_name: "ベーシック",
-          plan_amount: 500,
-          plan_interval: "month",
-          cancelled_at: null,
-          current_period_end: null,
-          cancel_at_period_end: false,
-          created_at: "2026-01-01T00:00:00Z"
-        });
-      }
-      if (path === "/api/subscription/plans") {
-        return Promise.resolve([
-          {
-            fincode_plan_id: "plan_mock_basic",
-            name: "ベーシック",
-            amount: 500,
-            currency: "JPY",
-            interval: "month"
-          },
-          {
-            fincode_plan_id: "plan_mock_pro",
-            name: "プロ",
-            amount: 1500,
-            currency: "JPY",
-            interval: "month"
-          }
-        ]);
-      }
-      if (path === "/api/subscription/cards") return Promise.resolve([]);
-      if (path.startsWith("/api/subscription/history")) {
-        return Promise.resolve({ data: [], page: 1, per_page: 10, total: 0 });
-      }
-      return Promise.resolve(null);
-    });
-
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>
+    mocks.apiFetch.mockImplementation(
+      mockApiFetch({
+        "/api/subscription": buildSubscription({ status: "unpaid" }),
+        "/api/subscription/plans": [
+          buildPlan(),
+          buildPlan({ fincode_plan_id: "plan_mock_pro", name: "プロ", amount: 1500 })
+        ]
+      })
     );
+
+    renderHomePage();
 
     // 未払いバッジと案内文が表示される（サマリーと契約セクションの複数箇所に出る）。
     await waitFor(() => {
@@ -325,67 +204,20 @@ describe("HomePage cards section", () => {
   });
 
   it("uses the plan change endpoint when an active subscription already exists", async () => {
-    mocks.apiFetch.mockImplementation((path: string, init?: RequestInit) => {
-      if (path === "/api/subscription" && init?.method === "PATCH") {
-        return Promise.resolve({
-          id: 1,
-          status: "active",
-          fincode_subscription_id: "sub_mock_1",
-          fincode_plan_id: "plan_mock_pro",
-          plan_name: "プロ",
-          plan_amount: 1500,
-          plan_interval: "month",
-          cancelled_at: null,
-          current_period_end: null,
-          cancel_at_period_end: false,
-          created_at: "2026-01-01T00:00:00Z"
-        });
-      }
-      if (path === "/api/subscription") {
-        return Promise.resolve({
-          id: 1,
-          status: "active",
-          fincode_subscription_id: "sub_mock_1",
-          fincode_plan_id: "plan_mock_basic",
-          plan_name: "ベーシック",
-          plan_amount: 500,
-          plan_interval: "month",
-          cancelled_at: null,
-          current_period_end: null,
-          cancel_at_period_end: false,
-          created_at: "2026-01-01T00:00:00Z"
-        });
-      }
-      if (path === "/api/subscription/plans") {
-        return Promise.resolve([
-          {
-            fincode_plan_id: "plan_mock_basic",
-            name: "ベーシック",
-            amount: 500,
-            currency: "JPY",
-            interval: "month"
-          },
-          {
-            fincode_plan_id: "plan_mock_pro",
-            name: "プロ",
-            amount: 1500,
-            currency: "JPY",
-            interval: "month"
-          }
-        ]);
-      }
-      if (path === "/api/subscription/cards") return Promise.resolve([]);
-      if (path.startsWith("/api/subscription/history")) {
-        return Promise.resolve({ data: [], page: 1, per_page: 10, total: 0 });
-      }
-      return Promise.resolve(null);
-    });
-
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>
+    mocks.apiFetch.mockImplementation(
+      mockApiFetch({
+        "/api/subscription": (_path: string, init?: RequestInit) =>
+          init?.method === "PATCH"
+            ? buildSubscription({ fincode_plan_id: "plan_mock_pro", plan_name: "プロ", plan_amount: 1500 })
+            : buildSubscription(),
+        "/api/subscription/plans": [
+          buildPlan(),
+          buildPlan({ fincode_plan_id: "plan_mock_pro", name: "プロ", amount: 1500 })
+        ]
+      })
     );
+
+    renderHomePage();
 
     await userEvent.click(await screen.findByRole("button", { name: "このプランに変更" }));
 
