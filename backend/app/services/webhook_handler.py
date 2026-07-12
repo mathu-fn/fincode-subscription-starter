@@ -5,8 +5,12 @@
 を upsert する。不明なイベントタイプは ``dlq_reason`` に保存し、オペレーターが
 イベントを失うことなく調査できるようにする。
 
-ルーターは Webhook 配信ごとに 1 トランザクションを使用する。ハンドラーが
+ルーターは Webhook 配信ごとに 1 トランザクションを使用し、コミットも
+ルーター側が行う（他の Manager と同じトランザクション所有規約）。ハンドラーが
 例外を発生させると行はロールバックされ、fincode が再配信する。
+
+fincode への HTTP 呼び出しを持たない受信専用サービスなので、fincode ラッパー層
+（``app/services/fincode/``）ではなくドメインサービス層（``app/services/``）に置く。
 """
 
 from __future__ import annotations
@@ -111,7 +115,9 @@ class FincodeWebhookHandler:
         else:
             seen.dlq_reason = f"unknown event_type: {event_type}"
 
-        await db.commit()
+        # コミットはルーターが行う。ここでは保留中の変更を flush だけして、
+        # 同一トランザクション内の後続処理（テスト含む）から見える状態にする。
+        await db.flush()
 
     async def _handle_payment(
         self, body: dict[str, Any], db: AsyncSession, seen: WebhookEventSeen, *, event_type: str

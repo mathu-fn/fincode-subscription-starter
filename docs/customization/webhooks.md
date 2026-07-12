@@ -17,12 +17,17 @@ FastAPIでの形:
 async def fincode_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    handler: FincodeWebhookHandler = Depends(get_fincode_webhook_handler),
+    handler: FincodeWebhookHandler = Depends(get_webhook_handler),
 ) -> None:
     payload = await request.body()
     signature = request.headers.get("Fincode-Signature")
     await handler.handle(payload=payload, signature=signature, db=db)
+    # トランザクションの所有はルーター側。ハンドラーが例外を出した場合は
+    # コミットに到達しない。
+    await db.commit()
 ```
+
+本リポジトリの実装は `app/services/webhook_handler.py`（fincode を呼ばない受信専用サービスのため、`app/services/fincode/` ではなくドメインサービス層）と `app/api/routes/webhooks.py` にあります。
 
 このルートはユーザーからではなく fincode から呼ばれるため、JWT では保護しません。必ず署名検証で保護します。
 

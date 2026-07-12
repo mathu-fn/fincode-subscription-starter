@@ -5,8 +5,8 @@ from typing import Any
 
 from app.core.enums import SubscriptionStatus
 from app.models.subscription import Subscription
-from app.services.fincode.webhook_handler import FincodeWebhookHandler
 from app.services.subscription_periods import as_utc
+from app.services.webhook_handler import FincodeWebhookHandler
 from tests.conftest import WEBHOOK_SECRET, signed_payload
 
 

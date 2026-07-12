@@ -18,6 +18,7 @@ from app.services.audit_logger import AuditLogger, get_audit_logger
 from app.services.card_manager import CardManager
 from app.services.fincode.client import FincodeClient
 from app.services.subscription_manager import SubscriptionManager
+from app.services.webhook_handler import FincodeWebhookHandler
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -116,3 +117,13 @@ def get_subscription_manager(
 
 
 SubscriptionManagerDep = Annotated[SubscriptionManager, Depends(get_subscription_manager)]
+
+
+def get_webhook_handler(
+    settings: SettingsDep,
+    audit: AuditLoggerDep,
+) -> FincodeWebhookHandler:
+    return FincodeWebhookHandler(secret=settings.fincode_webhook_secret, audit=audit)
+
+
+WebhookHandlerDep = Annotated[FincodeWebhookHandler, Depends(get_webhook_handler)]
