@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError
 from app.models.fincode_card import FincodeCard
 from app.models.fincode_customer import FincodeCustomer
 from app.models.subscription import Subscription
@@ -93,11 +93,7 @@ class CardManager(BaseManager):
         return card
 
     async def delete_card(self, db: AsyncSession, user: User, card_id: int) -> None:
-        card = await db.get(FincodeCard, card_id)
-        # 他ユーザーのカードも「存在しない」扱いに統一する。403 を返すと連番 ID に
-        # 対してカードの存在有無を露呈してしまう（ID 列挙対策）。
-        if card is None or card.deleted_at is not None or card.user_id != user.id:
-            raise NotFoundError(code="card_not_found")
+        card = await self._get_owned_card(db, user, card_id)
 
         active = await db.execute(
             select(Subscription).where(

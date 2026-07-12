@@ -78,7 +78,6 @@ def applied_migrations(postgres_container: PostgresContainer) -> str:
 
     get_settings.cache_clear()
 
-    from alembic import command
     from alembic.config import Config
 
     cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
@@ -86,6 +85,9 @@ def applied_migrations(postgres_container: PostgresContainer) -> str:
     cfg.set_main_option(
         "script_location", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "alembic"))
     )
+
+    from alembic import command
+
     command.upgrade(cfg, "head")
     return async_url
 

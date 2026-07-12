@@ -20,7 +20,7 @@ from app.core.exceptions import (
 from app.models.fincode_customer import FincodeCustomer
 from app.models.user import User
 from app.services.fincode.client import FincodeClient
-from app.services.fincode.customer_service import FincodeCustomerService
+from app.services.fincode.customer_service import FincodeCustomerService, local_customer_id
 
 
 class CustomerSyncService:
@@ -44,7 +44,7 @@ class CustomerSyncService:
         # 呼び出し元が正常に失敗しユーザーが再試行できるよう、例外を再送出する。
         try:
             created = await self._fincode.create(user_id=user.id, email=user.email, name=user.name)
-            customer_id = created.get("id") or f"local_user_{user.id}"
+            customer_id = created.get("id") or local_customer_id(user.id)
         except (
             FincodeServerError,
             FincodeTimeoutError,
@@ -53,7 +53,7 @@ class CustomerSyncService:
         ):
             raise
         except FincodeApiError:
-            customer_id = f"local_user_{user.id}"
+            customer_id = local_customer_id(user.id)
 
         customer = FincodeCustomer(
             user_id=user.id,

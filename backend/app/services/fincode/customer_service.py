@@ -12,9 +12,18 @@ from app.services.fincode.base import BaseFincodeService
 from app.services.fincode.idempotency import idem_key
 
 
+def local_customer_id(user_id: int) -> str:
+    """ローカルユーザーから決定論的に導出する fincode 顧客 ID。
+
+    作成リクエストの ``id`` と、fincode 応答が使えない場合のフォールバックの両方が
+    この 1 箇所から導出される（書式がずれると顧客の対応付けが壊れる）。
+    """
+    return f"local_user_{user_id}"
+
+
 class FincodeCustomerService(BaseFincodeService):
     async def create(self, *, user_id: int, email: str, name: str) -> dict[str, Any]:
-        body = {"id": f"local_user_{user_id}", "email": email, "name": name}
+        body = {"id": local_customer_id(user_id), "email": email, "name": name}
         return await self._client.request(
             "POST",
             "/v1/customers",

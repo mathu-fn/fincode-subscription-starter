@@ -19,6 +19,11 @@ from app.schemas.subscription import (
 
 router = APIRouter(prefix="/subscription", tags=["subscriptions"])
 
+# クライアント提供の Idempotency-Key ヘッダー。POST / PATCH で同じ制約を共有する。
+IdempotencyKeyHeader = Annotated[
+    str | None, Header(alias="Idempotency-Key", min_length=1, max_length=64)
+]
+
 
 @router.get("", response_model=SubscriptionOut | None)
 @limiter.limit("60/minute")
@@ -42,9 +47,7 @@ async def create_subscription(
     db: SessionDep,
     user: CurrentUserDep,
     manager: SubscriptionManagerDep,
-    idempotency_key: Annotated[
-        str | None, Header(alias="Idempotency-Key", min_length=1, max_length=64)
-    ] = None,
+    idempotency_key: IdempotencyKeyHeader = None,
 ) -> SubscriptionOut:
     sub = await manager.subscribe(
         db,
@@ -66,9 +69,7 @@ async def change_subscription_plan(
     db: SessionDep,
     user: CurrentUserDep,
     manager: SubscriptionManagerDep,
-    idempotency_key: Annotated[
-        str | None, Header(alias="Idempotency-Key", min_length=1, max_length=64)
-    ] = None,
+    idempotency_key: IdempotencyKeyHeader = None,
 ) -> SubscriptionOut:
     sub = await manager.change_plan(
         db,

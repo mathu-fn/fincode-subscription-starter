@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -129,11 +130,7 @@ class SubscriptionManager(BaseManager):
         user: User,
         card_id: int,
     ) -> FincodeCard:
-        card = await db.get(FincodeCard, card_id)
-        # 他ユーザーのカードも「存在しない」扱いに統一する。403 を返すと連番 ID に
-        # 対してカードの存在有無を露呈してしまう（ID 列挙対策）。
-        if card is None or card.deleted_at is not None or card.user_id != user.id:
-            raise NotFoundError("Card not found.", code="card_not_found")
+        card = await self._get_owned_card(db, user, card_id)
 
         # fincode の日付境界は JST で解釈されるため、有効期限の年月判定も JST 基準で行う。
         # UTC 基準だと月替わりの前後最大 9 時間、判定が fincode とずれる。
@@ -142,6 +139,28 @@ class SubscriptionManager(BaseManager):
         if (card.exp_year, card.exp_month) < (now.year, now.month):
             raise UnprocessableError(code="expired_card")
         return card
+
+    async def _find_replayed_subscription(
+        self, db: AsyncSession, user: User, idempotency_key: str | None
+    ) -> Subscription | None:
+        # Idempotency-Key リプレイ: 同じクライアント提供キーによるリトライは、
+        # 新しい fincode 契約を開始する代わりに以前の成功した行を返す。
+        # これがなければ、レスポンスが途中で失われた後のクライアントリトライが
+        # 新しいノンスで fincode に到達し、新しい Idempotency-Key で重複契約
+        # （二重請求）を作成してしまう。
+        # 注意: リプレイは plan_id を照合しない。同じキーで別プランを送った場合も
+        # 以前成功した行をそのまま返す（Idempotency-Key の意味論として正しい。
+        # キーの使い回しはクライアント側のバグであり、ここで隠蔽も昇格もしない）。
+        if idempotency_key is None:
+            return None
+        prior: Subscription | None = await db.scalar(
+            select(Subscription).where(
+                Subscription.user_id == user.id,
+                Subscription.nonce == idempotency_key,
+                *usable_subscription_conditions(datetime.now(UTC)),
+            )
+        )
+        return prior
 
     async def subscribe(
         self,
@@ -154,24 +173,9 @@ class SubscriptionManager(BaseManager):
     ) -> Subscription:
         await self._finalize_elapsed_cancellations(db, user)
 
-        # Idempotency-Key リプレイ: 同じクライアント提供キーによるリトライは、
-        # 新しい fincode 契約を開始する代わりに以前の成功した行を返す。
-        # これがなければ、レスポンスが途中で失われた後のクライアントリトライが
-        # 新しいノンスで fincode に到達し、新しい Idempotency-Key で重複契約
-        # （二重請求）を作成してしまう。
-        # 注意: リプレイは plan_id を照合しない。同じキーで別プランを送った場合も
-        # 以前成功した行をそのまま返す（Idempotency-Key の意味論として正しい。
-        # キーの使い回しはクライアント側のバグであり、ここで隠蔽も昇格もしない）。
-        if idempotency_key is not None:
-            prior = await db.scalar(
-                select(Subscription).where(
-                    Subscription.user_id == user.id,
-                    Subscription.nonce == idempotency_key,
-                    *usable_subscription_conditions(datetime.now(UTC)),
-                )
-            )
-            if prior is not None:
-                return prior
+        prior = await self._find_replayed_subscription(db, user, idempotency_key)
+        if prior is not None:
+            return prior
 
         existing = await self.get_active(db, user)
         if existing is not None:
@@ -240,6 +244,70 @@ class SubscriptionManager(BaseManager):
         )
         return sub
 
+    @staticmethod
+    def _plan_audit_snapshot(sub: Subscription) -> dict[str, Any]:
+        """change_plan の監査 before / after に使うプラン情報のスナップショット。"""
+        return {
+            "fincode_subscription_id": sub.fincode_subscription_id,
+            "fincode_plan_id": sub.fincode_plan_id,
+            "plan_name": sub.plan_name,
+            "plan_amount": sub.plan_amount,
+            "plan_interval": sub.plan_interval,
+        }
+
+    async def _recreate_paid_subscription(
+        self,
+        db: AsyncSession,
+        user: User,
+        sub: Subscription,
+        *,
+        plan: PlanData,
+        card_id: int | None,
+        nonce: str,
+    ) -> None:
+        # fincode は課金開始済みサブスクのプラン変更（PUT /v1/subscriptions/{id}）を
+        # 拒否する（ESC03194031「既に課金処理が開始されてます。対象のサブスクリプション
+        # は変更できません」）。そのため有料→有料の変更は、現行 fincode サブスクを解約し、
+        # 新プランで作り直して同じローカル ``subscriptions`` 行を更新する。fincode に日割りは
+        # 無く、新サブスクは新しい請求サイクルで開始される（apply_current_period_end は
+        # 新サブスクの期限で置き換える。only_extend は使わない）。
+        #
+        # 注意（非アトミック）: 解約と再作成は別 API 呼び出しでトランザクションにまとめられない。
+        # 解約成功後に再作成が失敗すると、fincode 上はサブスク無し・ローカル行は変更前へ
+        # ロールバックされ不整合になる。失敗はコンテキスト付きでログに残す。本番では補償
+        # （再試行・手動復旧導線）が必要。
+        card_id_for_change = card_id if card_id is not None else sub.fincode_card_id
+        if card_id_for_change is None:
+            raise UnprocessableError(code="card_required")
+        card = await self._get_usable_card(db, user, card_id_for_change)
+        customer = await self._customers.ensure(db, user)
+        old_fincode_subscription_id = sub.fincode_subscription_id
+        # 呼び出し元（change_plan の有料継続分岐）が fincode_subscription_id の存在を保証する。
+        assert old_fincode_subscription_id is not None
+        await self._subs.cancel(fincode_subscription_id=old_fincode_subscription_id)
+        try:
+            raw = await self._subs.create(
+                user_id=user.id,
+                customer_id=customer.fincode_customer_id,
+                card_id=card.fincode_card_id,
+                plan_id=plan["fincode_plan_id"],
+                nonce=nonce,
+            )
+        except Exception:
+            # 解約は済んでいるが再作成に失敗。ローカル行はロールバックされ
+            # fincode と不整合になる危険な状態。補償のため孤立した解約済み ID を残す。
+            logger.error(
+                "plan_change_recreate_failed",
+                user_id=user.id,
+                cancelled_fincode_subscription_id=old_fincode_subscription_id,
+                target_plan_id=plan["fincode_plan_id"],
+            )
+            raise
+        sub.fincode_customer_id = customer.id
+        sub.fincode_card_id = card.id
+        sub.fincode_subscription_id = raw.get("id")
+        apply_current_period_end(sub, raw)
+
     async def change_plan(
         self,
         db: AsyncSession,
@@ -261,13 +329,7 @@ class SubscriptionManager(BaseManager):
         if sub.fincode_plan_id == plan_id:
             return sub
 
-        before = {
-            "fincode_subscription_id": sub.fincode_subscription_id,
-            "fincode_plan_id": sub.fincode_plan_id,
-            "plan_name": sub.plan_name,
-            "plan_amount": sub.plan_amount,
-            "plan_interval": sub.plan_interval,
-        }
+        before = self._plan_audit_snapshot(sub)
 
         if plan_id == FREE_PLAN_ID:
             # 有料→フリーは fincode 契約を解約し、当期の残りを待たず即時にフリーへ
@@ -304,46 +366,9 @@ class SubscriptionManager(BaseManager):
                 sub.fincode_subscription_id = raw.get("id")
                 apply_current_period_end(sub, raw)
             else:
-                # fincode は課金開始済みサブスクのプラン変更（PUT /v1/subscriptions/{id}）を
-                # 拒否する（ESC03194031「既に課金処理が開始されてます。対象のサブスクリプション
-                # は変更できません」）。そのため有料→有料の変更は、現行 fincode サブスクを解約し、
-                # 新プランで作り直して同じローカル ``subscriptions`` 行を更新する。fincode に日割りは
-                # 無く、新サブスクは新しい請求サイクルで開始される（apply_current_period_end は
-                # 新サブスクの期限で置き換える。only_extend は使わない）。
-                #
-                # 注意（非アトミック）: 解約と再作成は別 API 呼び出しでトランザクションにまとめられない。
-                # 解約成功後に再作成が失敗すると、fincode 上はサブスク無し・ローカル行は変更前へ
-                # ロールバックされ不整合になる。失敗はコンテキスト付きでログに残す。本番では補償
-                # （再試行・手動復旧導線）が必要。
-                card_id_for_change = card_id if card_id is not None else sub.fincode_card_id
-                if card_id_for_change is None:
-                    raise UnprocessableError(code="card_required")
-                card = await self._get_usable_card(db, user, card_id_for_change)
-                customer = await self._customers.ensure(db, user)
-                old_fincode_subscription_id = sub.fincode_subscription_id
-                await self._subs.cancel(fincode_subscription_id=old_fincode_subscription_id)
-                try:
-                    raw = await self._subs.create(
-                        user_id=user.id,
-                        customer_id=customer.fincode_customer_id,
-                        card_id=card.fincode_card_id,
-                        plan_id=plan["fincode_plan_id"],
-                        nonce=nonce,
-                    )
-                except Exception:
-                    # 解約は済んでいるが再作成に失敗。ローカル行はロールバックされ
-                    # fincode と不整合になる危険な状態。補償のため孤立した解約済み ID を残す。
-                    logger.error(
-                        "plan_change_recreate_failed",
-                        user_id=user.id,
-                        cancelled_fincode_subscription_id=old_fincode_subscription_id,
-                        target_plan_id=plan["fincode_plan_id"],
-                    )
-                    raise
-                sub.fincode_customer_id = customer.id
-                sub.fincode_card_id = card.id
-                sub.fincode_subscription_id = raw.get("id")
-                apply_current_period_end(sub, raw)
+                await self._recreate_paid_subscription(
+                    db, user, sub, plan=plan, card_id=card_id, nonce=nonce
+                )
             _apply_plan_snapshot(sub, plan)
             sub.cancelled_at = None
             sub.status = SubscriptionStatus.ACTIVE
@@ -356,15 +381,25 @@ class SubscriptionManager(BaseManager):
             auditable_type=self.auditable_type,
             auditable_id=sub.id,
             before=before,
-            after={
-                "fincode_subscription_id": sub.fincode_subscription_id,
-                "fincode_plan_id": sub.fincode_plan_id,
-                "plan_name": sub.plan_name,
-                "plan_amount": sub.plan_amount,
-                "plan_interval": sub.plan_interval,
-            },
+            after=self._plan_audit_snapshot(sub),
         )
         return sub
+
+    @staticmethod
+    def _cancel_audit_after(sub: Subscription) -> dict[str, Any]:
+        """cancel の監査 after 辞書。フリー/有料どちらの解約パスでも同じ形で残す。
+
+        フリーパスは解約確定後（status != active）なので ``cancel_at_period_end`` は
+        model property の定義により常に False となり、従来のハードコードと一致する。
+        """
+        return {
+            "status": sub.status,
+            "cancel_at_period_end": cancel_at_period_end(sub),
+            "cancelled_at": sub.cancelled_at.isoformat() if sub.cancelled_at else None,
+            "current_period_end": (
+                sub.current_period_end.isoformat() if sub.current_period_end else None
+            ),
+        }
 
     async def cancel(self, db: AsyncSession, user: User) -> Subscription:
         await self._finalize_elapsed_cancellations(db, user)
@@ -391,14 +426,7 @@ class SubscriptionManager(BaseManager):
                 auditable_type=self.auditable_type,
                 auditable_id=sub.id,
                 before=before,
-                after={
-                    "status": sub.status,
-                    "cancel_at_period_end": False,
-                    "cancelled_at": sub.cancelled_at.isoformat(),
-                    "current_period_end": (
-                        sub.current_period_end.isoformat() if sub.current_period_end else None
-                    ),
-                },
+                after=self._cancel_audit_after(sub),
             )
             return sub
         raw = await self._subs.cancel(fincode_subscription_id=sub.fincode_subscription_id)
@@ -417,14 +445,7 @@ class SubscriptionManager(BaseManager):
             auditable_type=self.auditable_type,
             auditable_id=sub.id,
             before=before,
-            after={
-                "status": sub.status,
-                "cancel_at_period_end": cancel_at_period_end(sub),
-                "cancelled_at": sub.cancelled_at.isoformat(),
-                "current_period_end": (
-                    sub.current_period_end.isoformat() if sub.current_period_end else None
-                ),
-            },
+            after=self._cancel_audit_after(sub),
         )
         return sub
 
