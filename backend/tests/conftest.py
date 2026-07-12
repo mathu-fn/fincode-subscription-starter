@@ -7,6 +7,9 @@ rate limiter between tests so individual tests are independent.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import os
 from collections.abc import AsyncIterator, Iterator
 from typing import Any, cast
@@ -17,9 +20,13 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
+# Webhook テストが署名を作るときに使う共有シークレット。下の setdefault が
+# この定数を参照するため、環境変数とテストコードの値が構造的にずれない。
+WEBHOOK_SECRET = "test-webhook-secret"
+
 # Set env BEFORE app modules import the settings.
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-please-change-very-long-string")
-os.environ.setdefault("FINCODE_WEBHOOK_SECRET", "test-webhook-secret")
+os.environ.setdefault("FINCODE_WEBHOOK_SECRET", WEBHOOK_SECRET)
 os.environ.setdefault("RATE_LIMIT_STORAGE_URI", "memory://")
 os.environ.setdefault("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
 
@@ -73,13 +80,14 @@ def applied_migrations(postgres_container: PostgresContainer) -> str:
 
     from alembic.config import Config
 
-    from alembic import command
-
     cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", sync_url)
     cfg.set_main_option(
         "script_location", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "alembic"))
     )
+
+    from alembic import command
+
     command.upgrade(cfg, "head")
     return async_url
 
@@ -136,6 +144,14 @@ async def client(app_instance) -> AsyncIterator[AsyncClient]:
 
 
 CURRENT_PERIOD_END = "2099-01-01T00:00:00+00:00"
+
+
+def signed_payload(payload: dict[str, Any]) -> tuple[bytes, str]:
+    """Webhook ペイロードを JSON 化し、HMAC-SHA256 署名と組で返す。"""
+
+    body = json.dumps(payload).encode()
+    signature = hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    return body, signature
 
 
 class FakeFincodeClient:
@@ -226,3 +242,32 @@ async def registered_user(db_session: AsyncSession) -> dict[str, Any]:
 async def auth_client(client: AsyncClient, registered_user: dict[str, Any]) -> AsyncClient:
     client.headers.update({"Authorization": f"Bearer {registered_user['token']}"})
     return client
+
+
+@pytest_asyncio.fixture()
+async def subscribed_user(
+    db_session: AsyncSession, registered_user: dict[str, Any]
+) -> dict[str, Any]:
+    """アクティブ契約済みユーザー。``registered_user`` に加えて active な契約行を持つ。
+
+    ``fincode_subscription_id`` は ``FakeFincodeClient`` が返す ``sub_test_1`` に
+    合わせているため、フェイク経由のフローと DB 直接セットアップを混在できる。
+    戻り値は ``registered_user`` の辞書に ``"subscription"`` キーを足した形。
+    """
+    from app.core.enums import SubscriptionStatus
+    from app.models.subscription import Subscription
+
+    sub = Subscription(
+        user_id=registered_user["user"]["id"],
+        fincode_subscription_id="sub_test_1",
+        nonce="nonce-sub_test_1",
+        fincode_plan_id="plan_test_pro",
+        plan_name="Pro",
+        plan_amount=500,
+        plan_interval="month",
+        status=SubscriptionStatus.ACTIVE,
+    )
+    db_session.add(sub)
+    await db_session.commit()
+    await db_session.refresh(sub)
+    return {**registered_user, "subscription": sub}

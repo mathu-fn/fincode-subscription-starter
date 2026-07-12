@@ -5,8 +5,12 @@
 を upsert する。不明なイベントタイプは ``dlq_reason`` に保存し、オペレーターが
 イベントを失うことなく調査できるようにする。
 
-ルーターは Webhook 配信ごとに 1 トランザクションを使用する。ハンドラーが
+ルーターは Webhook 配信ごとに 1 トランザクションを使用し、コミットも
+ルーター側が行う（他の Manager と同じトランザクション所有規約）。ハンドラーが
 例外を発生させると行はロールバックされ、fincode が再配信する。
+
+fincode への HTTP 呼び出しを持たない受信専用サービスなので、fincode ラッパー層
+（``app/services/fincode/``）ではなくドメインサービス層（``app/services/``）に置く。
 """
 
 from __future__ import annotations
@@ -59,6 +63,14 @@ class FincodeWebhookHandler:
         self._secret = secret
         self._audit = audit or AuditLogger()
 
+    @staticmethod
+    async def _find_subscription(db: AsyncSession, fincode_sub_id: str) -> Subscription | None:
+        """fincode サブスク ID からローカル契約行を検索する（無ければ None）。"""
+        sub: Subscription | None = await db.scalar(
+            select(Subscription).where(Subscription.fincode_subscription_id == fincode_sub_id)
+        )
+        return sub
+
     async def handle(self, *, payload: bytes, signature: str | None, db: AsyncSession) -> None:
         if not verify_signature(payload, signature, self._secret):
             raise UnauthenticatedError(code="invalid_webhook_signature")
@@ -103,7 +115,9 @@ class FincodeWebhookHandler:
         else:
             seen.dlq_reason = f"unknown event_type: {event_type}"
 
-        await db.commit()
+        # コミットはルーターが行う。ここでは保留中の変更を flush だけして、
+        # 同一トランザクション内の後続処理（テスト含む）から見える状態にする。
+        await db.flush()
 
     async def _handle_payment(
         self, body: dict[str, Any], db: AsyncSession, seen: WebhookEventSeen, *, event_type: str
@@ -120,9 +134,7 @@ class FincodeWebhookHandler:
             seen.dlq_reason = "missing subscription_id or payment_id"
             return
 
-        sub = await db.scalar(
-            select(Subscription).where(Subscription.fincode_subscription_id == fincode_sub_id)
-        )
+        sub = await self._find_subscription(db, fincode_sub_id)
         if sub is None:
             seen.dlq_reason = f"no local subscription for {fincode_sub_id}"
             return
@@ -190,9 +202,7 @@ class FincodeWebhookHandler:
             fincode_sub_id = data.get("id")
         if not fincode_sub_id:
             return
-        sub = await db.scalar(
-            select(Subscription).where(Subscription.fincode_subscription_id == fincode_sub_id)
-        )
+        sub = await self._find_subscription(db, fincode_sub_id)
         if sub is None:
             return
         apply_current_period_end(sub, data, only_extend=True)

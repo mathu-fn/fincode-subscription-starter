@@ -2,8 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Header, Request, Response, status
 
-from app.api.deps import AuditLoggerDep, SessionDep, SettingsDep
-from app.services.fincode.webhook_handler import FincodeWebhookHandler
+from app.api.deps import SessionDep, WebhookHandlerDep
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
@@ -16,11 +15,13 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 async def fincode_webhook(
     request: Request,
     db: SessionDep,
-    settings: SettingsDep,
-    audit: AuditLoggerDep,
+    handler: WebhookHandlerDep,
     fincode_signature: Annotated[str | None, Header(alias="Fincode-Signature")] = None,
 ) -> Response:
     body = await request.body()
-    handler = FincodeWebhookHandler(secret=settings.fincode_webhook_secret, audit=audit)
     await handler.handle(payload=body, signature=fincode_signature, db=db)
+    # トランザクションの所有はルーター側（他の Manager フローと同じ規約）。
+    # ハンドラーが例外を出した場合はコミットに到達せず、get_session のセッション
+    # クローズ時に未コミットの変更がロールバックされる。
+    await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

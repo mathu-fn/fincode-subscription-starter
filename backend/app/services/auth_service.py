@@ -12,6 +12,7 @@ from app.schemas.auth import AuthResponse, UserOut
 # verify_id_token をテストが 1 箇所で monkeypatch できるよう、関数ではなく
 # モジュールを import する（Google の JWKS を自動テストで叩かないため）。
 from app.services import google_identity
+from app.services.audit_logger import AuditLogger
 
 
 async def login_with_google(db: AsyncSession, credential: str) -> tuple[User, bool]:
@@ -47,6 +48,44 @@ async def login_with_google(db: AsyncSession, credential: str) -> tuple[User, bo
         # email 側の衝突（または読み直し失敗）は契約どおりの 409 に翻訳する。
         raise ConflictError(code="email_already_registered") from e
     return user, True
+
+
+async def record_login_audit(
+    db: AsyncSession, audit: AuditLogger, user: User, *, created: bool
+) -> None:
+    """Google ログイン成功の監査記録。新規作成時は auth.register を先に残す。
+
+    コミットは呼び出し元（ルーター）が行う。監査行はログイン処理と同じ
+    セッションに積まれ、原子的にコミットされる。
+    """
+    if created:
+        await audit.record(
+            db,
+            user_id=user.id,
+            event="auth.register",
+            auditable_type="user",
+            auditable_id=user.id,
+            after={"email": user.email, "name": user.name},
+        )
+    await audit.record(
+        db,
+        user_id=user.id,
+        event="auth.login",
+        auditable_type="user",
+        auditable_id=user.id,
+        after={"method": "google"},
+    )
+
+
+async def record_logout_audit(db: AsyncSession, audit: AuditLogger, user: User) -> None:
+    """ログアウトの監査記録。コミットは呼び出し元（ルーター）が行う。"""
+    await audit.record(
+        db,
+        user_id=user.id,
+        event="auth.logout",
+        auditable_type="user",
+        auditable_id=user.id,
+    )
 
 
 def issue_token(user: User) -> AuthResponse:

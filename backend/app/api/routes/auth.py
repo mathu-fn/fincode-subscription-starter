@@ -23,23 +23,7 @@ async def google_login(
     audit: AuditLoggerDep,
 ) -> AuthResponse:
     user, created = await auth_service.login_with_google(db, payload.credential)
-    if created:
-        await audit.record(
-            db,
-            user_id=user.id,
-            event="auth.register",
-            auditable_type="user",
-            auditable_id=user.id,
-            after={"email": user.email, "name": user.name},
-        )
-    await audit.record(
-        db,
-        user_id=user.id,
-        event="auth.login",
-        auditable_type="user",
-        auditable_id=user.id,
-        after={"method": "google"},
-    )
+    await auth_service.record_login_audit(db, audit, user, created=created)
     await db.commit()
     if created:
         # created_at などのサーバー既定値を issue_token が参照できるよう読み直す。
@@ -55,13 +39,7 @@ async def logout(
     user: CurrentUserDep,
     audit: AuditLoggerDep,
 ) -> MessageResponse:
-    await audit.record(
-        db,
-        user_id=user.id,
-        event="auth.logout",
-        auditable_type="user",
-        auditable_id=user.id,
-    )
+    await auth_service.record_logout_audit(db, audit, user)
     await db.commit()
     return MessageResponse(message="Logged out.")
 
