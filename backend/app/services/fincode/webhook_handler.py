@@ -59,6 +59,14 @@ class FincodeWebhookHandler:
         self._secret = secret
         self._audit = audit or AuditLogger()
 
+    @staticmethod
+    async def _find_subscription(db: AsyncSession, fincode_sub_id: str) -> Subscription | None:
+        """fincode サブスク ID からローカル契約行を検索する（無ければ None）。"""
+        sub: Subscription | None = await db.scalar(
+            select(Subscription).where(Subscription.fincode_subscription_id == fincode_sub_id)
+        )
+        return sub
+
     async def handle(self, *, payload: bytes, signature: str | None, db: AsyncSession) -> None:
         if not verify_signature(payload, signature, self._secret):
             raise UnauthenticatedError(code="invalid_webhook_signature")
@@ -120,9 +128,7 @@ class FincodeWebhookHandler:
             seen.dlq_reason = "missing subscription_id or payment_id"
             return
 
-        sub = await db.scalar(
-            select(Subscription).where(Subscription.fincode_subscription_id == fincode_sub_id)
-        )
+        sub = await self._find_subscription(db, fincode_sub_id)
         if sub is None:
             seen.dlq_reason = f"no local subscription for {fincode_sub_id}"
             return
@@ -190,9 +196,7 @@ class FincodeWebhookHandler:
             fincode_sub_id = data.get("id")
         if not fincode_sub_id:
             return
-        sub = await db.scalar(
-            select(Subscription).where(Subscription.fincode_subscription_id == fincode_sub_id)
-        )
+        sub = await self._find_subscription(db, fincode_sub_id)
         if sub is None:
             return
         apply_current_period_end(sub, data, only_extend=True)
