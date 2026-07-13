@@ -35,7 +35,7 @@ function cancelDialogDescription(sub: NonNullable<Subscription>): string {
   return "現在の契約はただちに解約されます。解約後は利用できません。";
 }
 
-const cardClass = "border border-sky-200 bg-white p-4 shadow-sm shadow-sky-100";
+const cardClass = "border border-sky-200 bg-white p-4";
 
 export function HomePage() {
   const mockMode = isFincodeMockMode();
@@ -577,7 +577,7 @@ export function HomePage() {
               <h3 className="text-lg font-bold text-sky-950">新規カードを追加</h3>
               <button
                 type="button"
-                className="text-sm font-semibold text-slate-600 transition-colors hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="text-sm font-semibold text-slate-600 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => setShowCardForm(false)}
                 disabled={cardSubmitting}
               >
@@ -597,10 +597,7 @@ export function HomePage() {
                   aria-live="polite"
                   aria-label="カード入力フォームを読み込み中"
                 >
-                  <span
-                    aria-hidden="true"
-                    className="h-8 w-8 animate-spin border-2 border-white border-t-transparent"
-                  />
+                  <span className="text-sm font-semibold text-white">読み込み中...</span>
                 </div>
               )}
               {mockMode ? (
@@ -632,7 +629,7 @@ export function HomePage() {
           <h2 className="text-xl font-bold text-sky-950">履歴</h2>
         </div>
         {!history ? (
-          <div className="overflow-x-auto border border-sky-200 bg-white shadow-sm shadow-sky-100">
+          <div className="overflow-x-auto border border-sky-200 bg-white">
             <table className="w-full min-w-[680px] border-collapse text-left">
               <thead>
                 <tr>
@@ -666,7 +663,7 @@ export function HomePage() {
           <p className="text-slate-700">履歴はまだありません。</p>
         ) : (
           <>
-            <div className="overflow-x-auto border border-sky-200 bg-white shadow-sm shadow-sky-100">
+            <div className="overflow-x-auto border border-sky-200 bg-white">
               <table className="w-full min-w-[680px] border-collapse text-left">
                 <thead>
                 <tr>
@@ -695,7 +692,7 @@ export function HomePage() {
             <div className="flex items-center justify-center gap-4">
               <button
                 type="button"
-                className="min-h-10 border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 transition-colors hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-10 border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={page === 1}
                 onClick={() => setPage((current) => current - 1)}
               >
@@ -706,7 +703,7 @@ export function HomePage() {
               </span>
               <button
                 type="button"
-                className="min-h-10 border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 transition-colors hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-10 border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={page >= totalPages}
                 onClick={() => setPage((current) => current + 1)}
               >

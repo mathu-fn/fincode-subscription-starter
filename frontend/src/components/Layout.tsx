@@ -7,7 +7,7 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-sky-50 text-slate-900">
-      <header className="flex flex-wrap items-center gap-4 border-b border-sky-200 bg-white px-4 py-4 shadow-sm shadow-sky-100 sm:px-6 lg:px-8">
+      <header className="flex flex-wrap items-center gap-4 border-b border-sky-200 bg-white px-4 py-4 sm:px-6 lg:px-8">
         <NavLink to="/" className="text-lg font-bold text-sky-950 hover:text-sky-700">
           fincode サブスク
         </NavLink>
@@ -42,7 +42,7 @@ export function Layout() {
           ) : (
             <NavLink
               to="/login"
-              className="inline-flex min-h-11 items-center justify-center border border-sky-600 bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
+              className="inline-flex min-h-11 items-center justify-center border border-sky-600 bg-sky-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
             >
               ログイン
             </NavLink>

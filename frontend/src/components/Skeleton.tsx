@@ -10,7 +10,7 @@ export function Skeleton({ className }: SkeletonProps) {
   return (
     <span
       aria-hidden="true"
-      className={`block animate-pulse bg-sky-100${className ? ` ${className}` : ""}`}
+      className={`block bg-sky-100${className ? ` ${className}` : ""}`}
     />
   );
 }
