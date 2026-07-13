@@ -29,7 +29,7 @@ export function AccountPage() {
         <p className="mt-2 text-sm text-slate-600">ログイン情報の確認とログアウトができます。</p>
       </header>
 
-      <article className="border border-sky-200 bg-white p-6 shadow-sm shadow-sky-100">
+      <article className="border border-sky-200 bg-white p-6">
         <dl className="grid gap-4 sm:grid-cols-2">
           <div className="bg-sky-50 p-4">
             <dt className="text-sm text-slate-500">名前</dt>

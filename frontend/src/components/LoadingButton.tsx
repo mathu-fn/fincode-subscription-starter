@@ -9,7 +9,7 @@ type LoadingButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const baseClass =
-  "inline-flex min-h-11 items-center justify-center gap-2 border px-5 py-2.5 text-sm font-semibold transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex min-h-11 items-center justify-center gap-2 border px-5 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
@@ -40,12 +40,6 @@ export function LoadingButton({
       className={classNames(baseClass, variantClasses[variant], className)}
       disabled={disabled || isLoading}
     >
-      {isLoading && (
-        <span
-          aria-hidden="true"
-          className="h-4 w-4 animate-spin border-2 border-current border-t-transparent"
-        />
-      )}
       <span>{isLoading ? loadingLabel ?? children : children}</span>
     </button>
   );

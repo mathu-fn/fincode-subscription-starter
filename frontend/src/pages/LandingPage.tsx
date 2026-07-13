@@ -4,7 +4,7 @@ import { badgeClass, primaryBtn, secondaryBtn, sectionTitle } from "../lib/style
 
 const GITHUB_URL = "https://github.com/ltac0203-pixel/fincode-subscription-starter";
 
-const cardClass = "border border-sky-200 bg-white p-6 shadow-sm shadow-sky-100";
+const cardClass = "border border-sky-200 bg-white p-6";
 
 const features: Array<{ title: string; description: string }> = [
   {
