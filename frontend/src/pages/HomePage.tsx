@@ -4,38 +4,29 @@ import { useLocation } from "react-router-dom";
 
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { LoadingButton } from "../components/LoadingButton";
-import { Skeleton } from "../components/Skeleton";
+import { Label } from "../components/Label";
 import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch, ApiError } from "../lib/apiClient";
 import { FincodeUiBundle, initFincodeUi, mountFincodeUi, tokenizeViaUi, unmountFincodeUi } from "../lib/fincodeJs";
 import { isFincodeMockMode } from "../lib/fincodeMode";
-import { inputClass, labelClass, pageClass, primaryLinkClass, sectionClass, summaryCardClass } from "../lib/styles";
+import { pageClass } from "../lib/styles";
 import type { Subscription, Plan, Card, HistoryItem, PaginatedBillingHistory } from "../types/api";
 
-const FINCODE_MOUNT_ID = "fincode-ui-mount";
-const PER_PAGE = 10;
-// 0円フリープランの番兵ID（バックエンドの FREE_PLAN_ID と一致）。
-const FREE_PLAN_ID = "free";
-
-function formatPlanPrice(amount: number, interval: string): string {
-  if (amount === 0) return "無料";
-  return `¥${amount.toLocaleString()} / ${interval}`;
-}
-
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString("ja-JP");
-}
-
-function cancelDialogDescription(sub: NonNullable<Subscription>): string {
-  if (sub.fincode_subscription_id && sub.current_period_end) {
-    return `現在の契約は ${formatDateTime(sub.current_period_end)} まで利用できます。次回以降の請求は発生しません。`;
-  }
-  return "現在の契約はただちに解約されます。解約後は利用できません。";
-}
-
-const cardClass = "border border-sky-200 bg-white p-4";
+import { CardsSection } from "./home/CardsSection";
+import { HistorySection } from "./home/HistorySection";
+import { PlansSection } from "./home/PlansSection";
+import { SubscriptionSection } from "./home/SubscriptionSection";
+import { SummaryCard } from "./home/SummaryCard";
+import {
+  cancelDialogDescription,
+  FINCODE_MOUNT_ID,
+  formatDateTime,
+  formatPlanPrice,
+  formatYen,
+  FREE_PLAN_ID,
+  PER_PAGE
+} from "./home/utils";
 
 export function HomePage() {
   const mockMode = isFincodeMockMode();
@@ -286,433 +277,97 @@ export function HomePage() {
 
   return (
     <section className={pageClass}>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="mb-1 text-xs font-bold uppercase text-sky-700">Dashboard</p>
-          <h1 className="text-3xl font-bold text-sky-950">ようこそ、{user?.name} さん</h1>
-        </div>
+      <div>
+        <Label>Dashboard</Label>
+        <h1 className="mt-1 font-dot text-3xl tracking-tight text-black sm:text-4xl">
+          ようこそ、{user?.name} さん
+        </h1>
       </div>
 
       <ErrorBanner error={error} />
 
       <div className="grid gap-3 md:grid-cols-3">
-        <article className={summaryCardClass}>
-          <span className="text-sm text-slate-500">現在の契約</span>
-          {!subscriptionLoaded ? (
-            <>
-              <Skeleton className="mt-1 h-7 w-3/4" />
-              <Skeleton className="mt-1 h-4 w-1/2" />
-            </>
-          ) : (
-            <>
-              <strong className="text-2xl font-bold leading-tight text-sky-950">
-                {sub ? sub.plan_name : "未登録"}
-              </strong>
-              <small className="flex items-center gap-2 text-sm text-slate-500">
-                {sub ? (
-                  <>
-                    <StatusBadge status={sub.status} />
-                    <span>{formatPlanPrice(sub.plan_amount, sub.plan_interval)}</span>
-                    {sub.cancel_at_period_end && <span>解約予約中</span>}
-                  </>
-                ) : (
-                  "プランを選択して契約できます"
-                )}
-              </small>
-            </>
-          )}
-        </article>
-        <article className={summaryCardClass}>
-          <span className="text-sm text-slate-500">登録カード</span>
-          {!plansLoaded ? (
-            <>
-              <Skeleton className="mt-1 h-7 w-1/2" />
-              <Skeleton className="mt-1 h-4 w-3/4" />
-            </>
-          ) : (
-            <>
-              <strong className="text-2xl font-bold leading-tight text-sky-950">
-                {cards.length} 枚
-              </strong>
-              <small className="text-sm text-slate-500">
-                {selectedCard ? `${selectedCard.brand} **** ${selectedCard.last4}` : "支払いカードを追加できます"}
-              </small>
-            </>
-          )}
-        </article>
-        <article className={summaryCardClass}>
-          <span className="text-sm text-slate-500">直近決済</span>
-          {!historyLoaded ? (
-            <>
-              <Skeleton className="mt-1 h-7 w-1/2" />
-              <Skeleton className="mt-1 h-4 w-3/4" />
-            </>
-          ) : (
-            <>
-              <strong className="text-2xl font-bold leading-tight text-sky-950">
-                {latestHistory ? `¥${latestHistory.amount.toLocaleString()}` : "履歴なし"}
-              </strong>
-              <small className="text-sm text-slate-500">
-                {latestHistory ? new Date(latestHistory.charged_at).toLocaleString("ja-JP") : "決済後に表示されます"}
-              </small>
-            </>
-          )}
-        </article>
+        <SummaryCard label="現在の契約" loading={!subscriptionLoaded}>
+          <strong className="text-2xl font-bold leading-tight text-black">
+            {sub ? sub.plan_name : "未登録"}
+          </strong>
+          <small className="flex flex-wrap items-center gap-2 text-sm text-muted">
+            {sub ? (
+              <>
+                <StatusBadge status={sub.status} />
+                <span className="font-mono">{formatPlanPrice(sub.plan_amount, sub.plan_interval)}</span>
+                {sub.cancel_at_period_end && <span>解約予約中</span>}
+              </>
+            ) : (
+              "プランを選択して契約できます"
+            )}
+          </small>
+        </SummaryCard>
+        <SummaryCard label="登録カード" loading={!plansLoaded}>
+          <strong className="font-mono text-2xl font-semibold leading-tight text-black">
+            {cards.length} 枚
+          </strong>
+          <small className="text-sm text-muted">
+            {selectedCard ? `${selectedCard.brand} **** ${selectedCard.last4}` : "支払いカードを追加できます"}
+          </small>
+        </SummaryCard>
+        <SummaryCard label="直近決済" loading={!historyLoaded}>
+          <strong className="font-mono text-2xl font-semibold leading-tight text-black">
+            {latestHistory ? formatYen(latestHistory.amount) : "履歴なし"}
+          </strong>
+          <small className="text-sm text-muted">
+            {latestHistory ? formatDateTime(latestHistory.charged_at) : "決済後に表示されます"}
+          </small>
+        </SummaryCard>
       </div>
 
-      <section id="subscription" className={sectionClass}>
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-bold text-sky-950">契約</h2>
-        </div>
-        {!subscriptionLoaded ? (
-          <p className="text-slate-600">読み込み中...</p>
-        ) : !sub ? (
-          <article className={cardClass}>
-            <p className="text-slate-700">アクティブな契約はありません。</p>
-            <p className="mt-4">
-              <a href="#plans" className={primaryLinkClass}>
-                プランを選ぶ
-              </a>
-            </p>
-          </article>
-        ) : (
-          <article className={cardClass}>
-            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="bg-sky-50 p-4">
-                <dt className="text-sm text-slate-500">プラン</dt>
-                <dd className="mt-1 font-semibold text-slate-900">{sub.plan_name}</dd>
-              </div>
-              <div className="bg-sky-50 p-4">
-                <dt className="text-sm text-slate-500">金額</dt>
-                <dd className="mt-1 font-semibold text-slate-900">{formatPlanPrice(sub.plan_amount, sub.plan_interval)}</dd>
-              </div>
-              <div className="bg-sky-50 p-4">
-                <dt className="text-sm text-slate-500">状態</dt>
-                <dd className="mt-1">
-                  <StatusBadge status={sub.status} />
-                  {sub.cancel_at_period_end && (
-                    <span className="ml-2 text-sm font-semibold text-amber-700">解約予約中</span>
-                  )}
-                </dd>
-              </div>
-              <div className="bg-sky-50 p-4">
-                <dt className="text-sm text-slate-500">契約日</dt>
-                <dd className="mt-1 font-semibold text-slate-900">{formatDateTime(sub.created_at)}</dd>
-              </div>
-              {sub.cancelled_at && (
-                <div className="bg-sky-50 p-4">
-                  <dt className="text-sm text-slate-500">{sub.cancel_at_period_end ? "解約申込日" : "解約日"}</dt>
-                  <dd className="mt-1 font-semibold text-slate-900">{formatDateTime(sub.cancelled_at)}</dd>
-                </div>
-              )}
-              {sub.current_period_end && (
-                <div className="bg-sky-50 p-4">
-                  <dt className="text-sm text-slate-500">
-                    {sub.cancel_at_period_end ? "利用可能期限" : "現在の請求期間終了"}
-                  </dt>
-                  <dd className="mt-1 font-semibold text-slate-900">{formatDateTime(sub.current_period_end)}</dd>
-                </div>
-              )}
-            </dl>
-            {sub.cancel_at_period_end && sub.current_period_end && (
-              <p className="mt-6 text-sm font-semibold text-amber-700">
-                この契約は {formatDateTime(sub.current_period_end)} まで利用できます。
-              </p>
-            )}
-            {sub.status === "unpaid" && (
-              <p className="mt-6 text-sm font-semibold text-rose-700">
-                お支払いが確認できませんでした。カードをご確認のうえ変更いただくか、プランを変更してください。
-              </p>
-            )}
-            {(sub.status === "active" || sub.status === "unpaid") && !sub.cancel_at_period_end && (
-              <p className="mt-6">
-                <LoadingButton type="button" variant="danger" isLoading={cancelling} loadingLabel="解約中..." onClick={() => setShowCancelConfirm(true)}>
-                  解約する
-                </LoadingButton>
-              </p>
-            )}
-          </article>
-        )}
-      </section>
+      <SubscriptionSection
+        subscriptionLoaded={subscriptionLoaded}
+        sub={sub}
+        cancelling={cancelling}
+        onRequestCancel={() => setShowCancelConfirm(true)}
+      />
 
-      <section id="plans" className={sectionClass}>
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-bold text-sky-950">プラン</h2>
-        </div>
-        {!plansLoaded ? (
-          <p className="text-slate-600">読み込み中...</p>
-        ) : (
-          <>
-            {cards.length === 0 ? (
-              <article className={cardClass}>
-                <p className="text-slate-700">有料プランの契約にはカードが必要です。フリープランはカード無しで契約できます。</p>
-                <p className="mt-4">
-                  <a href="#cards" className={primaryLinkClass}>
-                    カードを登録する
-                  </a>
-                </p>
-              </article>
-            ) : (
-              <label className={labelClass}>
-                <span>支払いカード</span>
-                <select
-                  className={inputClass}
-                  value={selectedCardId ?? ""}
-                  onChange={(e) => setSelectedCardId(Number(e.target.value))}
-                >
-                  {cards.map((card) => (
-                    <option key={card.id} value={card.id}>
-                      {card.brand} **** {card.last4} ({card.exp_month}/{card.exp_year})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {plans.map((plan) => {
-                // unpaid も「現契約あり」として扱う。新規契約（POST）はバックエンドが
-                // 409 (active_subscription_exists) で拒否するため、プラン変更（PATCH）に流す。
-                const activeSub = sub && (sub.status === "active" || sub.status === "unpaid") ? sub : null;
-                const isCurrentPlan = activeSub?.fincode_plan_id === plan.fincode_plan_id;
-                const planChangeBlocked = activeSub?.cancel_at_period_end ?? false;
-                const isFreeToPaid =
-                  activeSub?.fincode_plan_id === FREE_PLAN_ID && plan.fincode_plan_id !== FREE_PLAN_ID;
-                const needsCard = plan.amount > 0 && (!activeSub || isFreeToPaid);
-                const cardMissing = needsCard && cards.length === 0;
-                const buttonLabel = isCurrentPlan
-                  ? "現在のプラン"
-                  : planChangeBlocked
-                    ? "解約予約中"
-                    : activeSub
-                    ? "このプランに変更"
-                    : "このプランを契約";
-                return (
-                  <li key={plan.fincode_plan_id} className={`${cardClass} grid content-start gap-2`}>
-                    <h3 className="text-lg font-bold text-sky-950">{plan.name}</h3>
-                    <p className="text-2xl font-bold text-slate-900">
-                      {plan.amount === 0 ? (
-                        "無料"
-                      ) : (
-                        <>
-                          ¥{plan.amount.toLocaleString()} <span className="text-base font-normal text-slate-500">/ {plan.interval}</span>
-                        </>
-                      )}
-                    </p>
-                    <LoadingButton
-                      type="button"
-                      disabled={isCurrentPlan || planChangeBlocked || cardMissing || submittingPlan !== null}
-                      isLoading={submittingPlan === plan.fincode_plan_id}
-                      loadingLabel={activeSub ? "変更中..." : "登録中..."}
-                      title={
-                        planChangeBlocked
-                          ? "解約予約中はプラン変更できません"
-                          : cardMissing
-                            ? "先にカードを登録してください"
-                            : undefined
-                      }
-                      onClick={() =>
-                        activeSub ? changePlan(plan.fincode_plan_id) : subscribe(plan.fincode_plan_id)
-                      }
-                    >
-                      {buttonLabel}
-                    </LoadingButton>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        )}
-      </section>
+      <PlansSection
+        plansLoaded={plansLoaded}
+        plans={plans}
+        cards={cards}
+        selectedCardId={selectedCardId}
+        onSelectCard={(id) => setSelectedCardId(id)}
+        sub={sub}
+        submittingPlan={submittingPlan}
+        onSubscribe={subscribe}
+        onChangePlan={changePlan}
+      />
 
-      <section id="cards" className={sectionClass}>
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-sky-950">カード</h2>
-          {!showCardForm && (
-            <button
-              type="button"
-              className={primaryLinkClass}
-              onClick={() => {
-                setError(null);
-                setShowCardForm(true);
-                // モックモードは fincode.js を初期化しないのでローディング表示も不要。
-                setCardFormLoading(!mockMode);
-              }}
-            >
-              カードを追加
-            </button>
-          )}
-        </div>
-        <article className={cardClass}>
-          <h3 className="mb-3 text-lg font-bold text-sky-950">登録済みカード</h3>
-          {!plansLoaded ? (
-            <p className="text-slate-600">読み込み中...</p>
-          ) : cards.length === 0 ? (
-            <p className="text-slate-700">登録済みのカードはまだありません。</p>
-          ) : (
-            <ul className="grid gap-3">
-              {cards.map((card) => (
-                <li key={card.id} className="flex items-center justify-between gap-3 bg-sky-50 px-4 py-3">
-                  <span className="text-sm font-medium text-slate-800">
-                    {card.brand} **** {card.last4} ({card.exp_month}/{card.exp_year})
-                  </span>
-                  <LoadingButton
-                    type="button"
-                    variant="ghost"
-                    className="min-h-0 text-red-700 hover:text-red-900 focus:ring-red-500"
-                    disabled={deletingCardId !== null}
-                    isLoading={deletingCardId === card.id}
-                    loadingLabel="削除中..."
-                    onClick={() => setCardPendingDelete(card)}
-                  >
-                    削除
-                  </LoadingButton>
-                </li>
-              ))}
-            </ul>
-          )}
-        </article>
-        {showCardForm && (
-          <article className={`${cardClass} max-w-[480px]`}>
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-lg font-bold text-sky-950">新規カードを追加</h3>
-              <button
-                type="button"
-                className="text-sm font-semibold text-slate-600 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={() => setShowCardForm(false)}
-                disabled={cardSubmitting}
-              >
-                閉じる
-              </button>
-            </div>
-            <p className="mt-2 text-sm text-slate-600">
-              {mockMode
-                ? "モックモードです。fincode は呼び出されません。任意のテストトークンを直接入力すると、ダミーのカードが登録されます。"
-                : "カード番号と CVC はサーバーへ送信されません。fincode の UI コンポーネントでトークン化されたトークンのみがバックエンドへ送信されます。"}
-            </p>
-            <form onSubmit={onSubmitCard} className="relative mt-3 grid gap-3">
-              {cardFormLoading && (
-                <div
-                  className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/50"
-                  role="status"
-                  aria-live="polite"
-                  aria-label="カード入力フォームを読み込み中"
-                >
-                  <span className="text-sm font-semibold text-white">読み込み中...</span>
-                </div>
-              )}
-              {mockMode ? (
-                <label className={labelClass}>
-                  <span>テストトークンを直接入力</span>
-                  <input
-                    className={inputClass}
-                    value={mockToken}
-                    onChange={(e) => setMockToken(e.target.value)}
-                    placeholder="tok_mock_visa"
-                    autoComplete="off"
-                  />
-                </label>
-              ) : (
-                <div id={`${FINCODE_MOUNT_ID}-form`} className="max-w-full">
-                  <div id={FINCODE_MOUNT_ID} className="min-h-96 border border-sky-200 bg-white p-3" />
-                </div>
-              )}
-              <LoadingButton type="submit" isLoading={cardSubmitting} loadingLabel="登録中...">
-                カードを追加
-              </LoadingButton>
-            </form>
-          </article>
-        )}
-      </section>
+      <CardsSection
+        plansLoaded={plansLoaded}
+        cards={cards}
+        mockMode={mockMode}
+        showCardForm={showCardForm}
+        cardFormLoading={cardFormLoading}
+        cardSubmitting={cardSubmitting}
+        mockToken={mockToken}
+        deletingCardId={deletingCardId}
+        onAddCardClick={() => {
+          setError(null);
+          setShowCardForm(true);
+          // モックモードは fincode.js を初期化しないのでローディング表示も不要。
+          setCardFormLoading(!mockMode);
+        }}
+        onCloseCardForm={() => setShowCardForm(false)}
+        onMockTokenChange={(value) => setMockToken(value)}
+        onSubmitCard={onSubmitCard}
+        onRequestDeleteCard={(card) => setCardPendingDelete(card)}
+      />
 
-      <section id="history" className={sectionClass}>
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-bold text-sky-950">履歴</h2>
-        </div>
-        {!history ? (
-          <div className="overflow-x-auto border border-sky-200 bg-white">
-            <table className="w-full min-w-[680px] border-collapse text-left">
-              <thead>
-                <tr>
-                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">日時</th>
-                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">状態</th>
-                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">金額</th>
-                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">fincode 支払 ID</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <tr key={i}>
-                    <td className="border-b border-sky-100 px-4 py-3">
-                      <Skeleton className="h-4 w-32" />
-                    </td>
-                    <td className="border-b border-sky-100 px-4 py-3">
-                      <Skeleton className="h-4 w-16" />
-                    </td>
-                    <td className="border-b border-sky-100 px-4 py-3">
-                      <Skeleton className="h-4 w-20" />
-                    </td>
-                    <td className="border-b border-sky-100 px-4 py-3">
-                      <Skeleton className="h-4 w-40" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : history.data.length === 0 ? (
-          <p className="text-slate-700">履歴はまだありません。</p>
-        ) : (
-          <>
-            <div className="overflow-x-auto border border-sky-200 bg-white">
-              <table className="w-full min-w-[680px] border-collapse text-left">
-                <thead>
-                <tr>
-                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">日時</th>
-                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">状態</th>
-                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">金額</th>
-                  <th className="border-b border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-600">fincode 支払 ID</th>
-                </tr>
-                </thead>
-                <tbody>
-                {history.data.map((record) => (
-                  <tr key={record.id}>
-                    <td className="border-b border-sky-100 px-4 py-3 text-sm text-slate-800">
-                      {new Date(record.charged_at).toLocaleString("ja-JP")}
-                    </td>
-                    <td className="border-b border-sky-100 px-4 py-3 text-sm text-slate-800">
-                      <StatusBadge status={record.status} />
-                    </td>
-                    <td className="border-b border-sky-100 px-4 py-3 text-sm font-semibold text-slate-900">¥{record.amount.toLocaleString()}</td>
-                    <td className="border-b border-sky-100 px-4 py-3 text-sm text-slate-500">{record.fincode_payment_id ?? "-"}</td>
-                  </tr>
-                ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-center gap-4">
-              <button
-                type="button"
-                className="min-h-10 border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={page === 1}
-                onClick={() => setPage((current) => current - 1)}
-              >
-                前へ
-              </button>
-              <span className="text-sm font-semibold text-slate-700">
-                {history.page} / {totalPages}
-              </span>
-              <button
-                type="button"
-                className="min-h-10 border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={page >= totalPages}
-                onClick={() => setPage((current) => current + 1)}
-              >
-                次へ
-              </button>
-            </div>
-          </>
-        )}
-      </section>
+      <HistorySection
+        history={history}
+        page={page}
+        totalPages={totalPages}
+        onPrevPage={() => setPage((current) => current - 1)}
+        onNextPage={() => setPage((current) => current + 1)}
+      />
 
       <ConfirmDialog
         open={showCancelConfirm}
