@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { Layout } from "./components/Layout";
+import { PageLoading } from "./components/PageLoading";
 import { RequireAuth } from "./components/RequireAuth";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { AccountPage } from "./pages/AccountPage";
@@ -12,7 +13,7 @@ import { NotFoundPage } from "./pages/NotFoundPage";
 function RootRoute() {
   const { user, loading } = useAuth();
   if (loading) {
-    return <div className="mx-auto grid max-w-5xl gap-6 text-slate-700">読み込み中...</div>;
+    return <PageLoading />;
   }
   return user ? <HomePage /> : <LandingPage />;
 }

@@ -8,16 +8,19 @@ type LoadingButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
 };
 
+// 等幅・大文字・レタースペーシングのモノクロボタン。色は信号としてのみ使う。
 const baseClass =
-  "inline-flex min-h-11 items-center justify-center gap-2 border px-5 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex min-h-11 items-center justify-center gap-2 border px-5 py-2.5 font-mono text-xs uppercase tracking-[0.1em] transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
 
+// primary = 黒塗り・ホバーで白黒反転。danger = 赤の枠/文字（面で塗らず、ホバー時のみ反転）。
+// ghost = 文字のみ（インラインのテキストリンク用に padding を持たない）。
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "border-sky-600 bg-sky-500 text-white hover:bg-sky-600 focus:ring-sky-500 focus:ring-offset-white",
+    "border-black bg-black text-white hover:bg-white hover:text-black focus:ring-black focus:ring-offset-white",
   danger:
-    "border-red-700 bg-red-600 text-white hover:bg-red-700 focus:ring-red-600 focus:ring-offset-white",
+    "border-accent bg-white text-accent hover:bg-accent hover:text-white focus:ring-accent focus:ring-offset-white",
   ghost:
-    "border-transparent bg-transparent px-0 py-0 text-sky-700 hover:text-sky-900 focus:ring-sky-500 focus:ring-offset-white"
+    "border-transparent bg-transparent px-0 py-0 text-black hover:text-muted focus:ring-black focus:ring-offset-white"
 };
 
 function classNames(...classes: Array<string | false | undefined>) {
@@ -40,6 +43,13 @@ export function LoadingButton({
       className={classNames(baseClass, variantClasses[variant], className)}
       disabled={disabled || isLoading}
     >
+      {isLoading && (
+        // グローバルで border-radius:0 のため回転する四角のスピナー（ドット系の意匠に合う）。
+        <span
+          aria-hidden
+          className="inline-block h-3 w-3 animate-spin border border-current border-r-transparent"
+        />
+      )}
       <span>{isLoading ? loadingLabel ?? children : children}</span>
     </button>
   );
