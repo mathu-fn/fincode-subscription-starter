@@ -1,25 +1,24 @@
-// 契約 / 決済ステータスを日本語ラベル + 色付きバッジで表示する。
+// 契約 / 決済ステータスを日本語ラベルで表示する。
 // バックエンドが返す生の status 文字列（active / cancelled / unpaid / succeeded /
 // failed、および fincode が送ってくる任意の文字列）をそのまま受け取り、表示だけを
 // 変換する。制御フロー（sub.status === "active" などの比較）はこのコンポーネントの
 // 外側で生の文字列のまま行う。
+//
+// DESIGN 準拠: 色で塗り分けない（赤は「点」であり 1 画面 1〜2 箇所まで）。バッジは
+// 一律モノクロ（等幅大文字 + 1px 薄枠 + グレーの小ドット）で、区別は文言で行う。
+// アクティブ契約の「ライブ」を示す赤ドットは HomePage 側の 1 点だけに限定する。
 
-type StatusStyle = {
-  label: string;
-  className: string;
+// 既知のステータスの日本語ラベル。未知の値はフォールバック（生の文字列）で出す。
+const STATUS_LABELS: Record<string, string> = {
+  active: "契約中",
+  cancelled: "解約済み",
+  unpaid: "未払い",
+  succeeded: "成功",
+  failed: "失敗"
 };
 
-// 既知のステータスの表示マップ。未知の値はフォールバック（生の文字列 + グレー）で出す。
-const STATUS_STYLES: Record<string, StatusStyle> = {
-  active: { label: "契約中", className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  cancelled: { label: "解約済み", className: "border-slate-200 bg-slate-100 text-slate-600" },
-  unpaid: { label: "未払い", className: "border-amber-200 bg-amber-50 text-amber-700" },
-  succeeded: { label: "成功", className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  failed: { label: "失敗", className: "border-red-200 bg-red-50 text-red-700" }
-};
-
-const FALLBACK_CLASS = "border-slate-200 bg-slate-100 text-slate-600";
-const BASE_CLASS = "inline-flex items-center gap-1.5 border px-2.5 py-0.5 text-xs font-semibold";
+const BASE_CLASS =
+  "inline-flex items-center gap-1.5 border border-line bg-white px-2.5 py-0.5 font-mono text-xs uppercase tracking-[0.08em] text-black";
 
 type StatusBadgeProps = {
   status: string;
@@ -27,11 +26,12 @@ type StatusBadgeProps = {
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const style = STATUS_STYLES[status];
   // 未知のステータスでも値を落とさず、生の文字列をそのまま見せる。
-  const label = style?.label ?? status;
-  const colorClass = style?.className ?? FALLBACK_CLASS;
+  const label = STATUS_LABELS[status] ?? status;
   return (
-    <span className={`${BASE_CLASS} ${colorClass}${className ? ` ${className}` : ""}`}>{label}</span>
+    <span className={`${BASE_CLASS}${className ? ` ${className}` : ""}`}>
+      <span aria-hidden className="inline-block h-1.5 w-1.5 bg-neutral-400" />
+      {label}
+    </span>
   );
 }

@@ -1,10 +1,32 @@
 @import "tailwindcss";
 
+/* Nothing 風モノクローム・デザインシステム。
+   純白/純黒/グレーは Tailwind 標準の black / white / neutral-* を併用し、
+   ここでは信号色（赤）・罫線・薄グレー面・副次テキスト・書体だけをトークン化する。
+   @theme に置くことで bg-accent / border-line / font-dot などのユーティリティが生成される。 */
+@theme {
+  /* Colors — 色は情報ではなく信号。赤は「点」としてのみ使う。 */
+  --color-accent: #d71921; /* Nothing 風レッド（近似値）。変更するならこの1箇所で。 */
+  --color-surface: #f5f5f5; /* 薄グレー面（カード背景など） */
+  --color-line: #e5e5e5; /* 1px 罫線 */
+  --color-muted: #737373; /* 副次テキスト・キャプション */
+
+  /* Typography — ドット系は見出し/ロゴ/数字だけ。本文はサンセリフ。ラベルは等幅。
+     Doto / Inter / JetBrains Mono は日本語グリフを持たないため、
+     DotGothic16 / Noto Sans JP へフォールバックさせる（index.html で全て読み込む）。 */
+  --font-dot: "Doto", "DotGothic16", monospace;
+  --font-sans: "Inter", "Noto Sans JP", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "DotGothic16", monospace;
+
+  /* Motion — OS 的スナップ。150〜250ms で完結。 */
+  --ease-os: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 :root {
-  color: #0f172a;
-  background: #f0f9ff;
-  font-family: Inter, "Noto Sans JP", system-ui, sans-serif;
-  line-height: 1.5;
+  color: #000000;
+  background: #ffffff;
+  font-family: var(--font-sans);
+  line-height: 1.6;
   font-weight: 400;
 }
 
@@ -16,7 +38,7 @@
 body {
   min-width: 320px;
   margin: 0;
-  background: #f0f9ff;
+  background: #ffffff;
 }
 
 button,

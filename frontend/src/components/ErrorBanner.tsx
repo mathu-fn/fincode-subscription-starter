@@ -26,12 +26,13 @@ export function ErrorBanner({ error }: { error: ApiError | Error | null }) {
   if (!error) return null;
   const code = "code" in error ? (error as ApiError).code : "error";
   const label = codeLabels[code] ?? error.message;
+  // 赤は面で塗らず、細い左罫線の 1 点だけに使う。本文は黒、キャプションは等幅。
   return (
     <div
-      className="flex gap-2 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+      className="flex gap-2 border-l-2 border-accent bg-white px-4 py-3 text-sm text-black"
       role="alert"
     >
-      <strong>エラー：</strong>
+      <strong className="font-mono text-xs uppercase tracking-[0.1em] text-accent">エラー：</strong>
       <span>{label}</span>
     </div>
   );

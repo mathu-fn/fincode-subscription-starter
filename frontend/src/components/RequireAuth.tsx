@@ -2,13 +2,14 @@ import { Navigate, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 
 import { useAuth } from "../hooks/useAuth";
+import { PageLoading } from "./PageLoading";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
-    return <div className="mx-auto grid max-w-5xl gap-6 text-slate-700">読み込み中...</div>;
+    return <PageLoading />;
   }
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location }} />;

@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { Card } from "../components/Card";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { LoadingButton } from "../components/LoadingButton";
+import { SpecRow, SpecTable } from "../components/SpecTable";
 import { useAuth } from "../hooks/useAuth";
+import { mutedTextClass, sectionTitle } from "../lib/styles";
 
 export function AccountPage() {
   const { user, logout } = useAuth();
@@ -25,21 +28,15 @@ export function AccountPage() {
   return (
     <section className="mx-auto grid max-w-5xl gap-6">
       <header>
-        <h1 className="text-3xl font-bold text-sky-950">アカウント</h1>
-        <p className="mt-2 text-sm text-slate-600">ログイン情報の確認とログアウトができます。</p>
+        <h1 className={sectionTitle}>アカウント</h1>
+        <p className={`mt-2 ${mutedTextClass}`}>ログイン情報の確認とログアウトができます。</p>
       </header>
 
-      <article className="border border-sky-200 bg-white p-6">
-        <dl className="grid gap-4 sm:grid-cols-2">
-          <div className="bg-sky-50 p-4">
-            <dt className="text-sm text-slate-500">名前</dt>
-            <dd className="mt-1 font-semibold text-slate-900">{user?.name ?? "-"}</dd>
-          </div>
-          <div className="bg-sky-50 p-4">
-            <dt className="text-sm text-slate-500">メールアドレス</dt>
-            <dd className="mt-1 font-semibold text-slate-900">{user?.email ?? "-"}</dd>
-          </div>
-        </dl>
+      <Card className="p-6">
+        <SpecTable>
+          <SpecRow label="名前">{user?.name ?? "-"}</SpecRow>
+          <SpecRow label="メールアドレス">{user?.email ?? "-"}</SpecRow>
+        </SpecTable>
         <div className="mt-6">
           <LoadingButton
             type="button"
@@ -51,7 +48,7 @@ export function AccountPage() {
             ログアウト
           </LoadingButton>
         </div>
-      </article>
+      </Card>
 
       <ConfirmDialog
         open={confirmOpen}

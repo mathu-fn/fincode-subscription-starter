@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import type { ReactNode } from "react";
 
+import { mutedTextClass, secondaryBtn } from "../lib/styles";
 import type { ButtonVariant } from "../types/ui";
 
 import { LoadingButton } from "./LoadingButton";
@@ -56,7 +57,7 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !isConfirming) onCancel();
       }}
@@ -66,13 +67,13 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
-        className="w-full max-w-md border border-sky-200 bg-white p-6"
+        className="w-full max-w-md border border-line bg-white p-6"
       >
-        <h2 id={titleId} className="text-xl font-bold text-sky-950">
+        <h2 id={titleId} className="font-dot text-xl tracking-tight text-black">
           {title}
         </h2>
         {description && (
-          <div id={descriptionId} className="mt-3 text-sm text-slate-700">
+          <div id={descriptionId} className={`mt-3 ${mutedTextClass}`}>
             {description}
           </div>
         )}
@@ -82,7 +83,7 @@ export function ConfirmDialog({
             ref={cancelRef}
             onClick={onCancel}
             disabled={isConfirming}
-            className="inline-flex min-h-11 items-center justify-center border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className={`${secondaryBtn} disabled:cursor-not-allowed disabled:opacity-60`}
           >
             {cancelLabel}
           </button>

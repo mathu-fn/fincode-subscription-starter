@@ -5,7 +5,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { useAuth } from "../hooks/useAuth";
 import { ApiError } from "../lib/apiClient";
 import { initGoogleIdentity, renderGoogleButton } from "../lib/googleIdentity";
-import { authFormClass } from "../lib/styles";
+import { authFormClass, mutedTextClass, sectionTitle } from "../lib/styles";
 
 export function LoginPage() {
   const { loginWithGoogle } = useAuth();
@@ -55,14 +55,14 @@ export function LoginPage() {
 
   return (
     <section className="mx-auto grid max-w-md gap-6">
-      <h1 className="text-3xl font-bold text-sky-950">ログイン</h1>
+      <h1 className={sectionTitle}>ログイン</h1>
       <ErrorBanner error={error} />
       <div className={authFormClass}>
-        <p className="text-sm text-slate-600">
+        <p className={mutedTextClass}>
           Google アカウントでログインします。初めての方もそのままアカウントが作成されます。
         </p>
         <div ref={buttonRef} aria-label="Google でログイン" />
-        {submitting ? <p className="text-sm text-slate-600">ログイン中...</p> : null}
+        {submitting ? <p className={mutedTextClass}>ログイン中...</p> : null}
       </div>
     </section>
   );
