@@ -19,6 +19,26 @@ from app.core.logging import get_logger
 logger = get_logger("request")
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """全レスポンスに保守的なセキュリティヘッダを付与する。
+
+    ここは JSON API（+ Swagger UI）なので、CDN スクリプトを壊す厳格な CSP は
+    付けない（SPA 本体の CSP はフロントの配信ホスト側の責務）。ここでは MIME
+    スニッフィング抑止・クリックジャッキング防止・リファラ抑制のみを担う。
+    """
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        return response
+
+
 class RequestLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self,

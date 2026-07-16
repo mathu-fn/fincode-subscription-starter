@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.core.exception_handlers import register_exception_handlers
 from app.core.lifespan import lifespan
 from app.core.logging import configure_logging
-from app.core.middleware import RequestLogMiddleware
+from app.core.middleware import RequestLogMiddleware, SecurityHeadersMiddleware
 from app.core.rate_limit import limiter
 
 
@@ -29,6 +29,7 @@ def create_app() -> FastAPI:
     app.state.limiter = limiter
     app.add_middleware(SlowAPIMiddleware)
     app.add_middleware(RequestLogMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
