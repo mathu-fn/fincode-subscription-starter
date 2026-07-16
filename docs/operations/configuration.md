@@ -12,9 +12,11 @@ cp .env.example .env
 
 | キー | 既定値 | 用途 |
 | --- | --- | --- |
-| `APP_ENV` | `local` | 実行環境ラベル。`local` / `staging` / `production` などを設定 |
+| `APP_ENV` | `production`（安全側） | 実行環境ラベル。本番セーフティ検証（弱いデフォルト秘密鍵・モックモードの拒否）は**明示的な開発値でない限り**発動する |
 | `APP_URL` | `http://localhost:5173` | フロントエンドの公開 URL（メール本文等に使う場合の参照） |
 | `API_URL` | `http://localhost:8000` | バックエンドの公開 URL |
+
+> **`APP_ENV` は安全側デフォルト**です。`local` / `dev` / `development` / `test` / `testing` を**明示したときだけ**開発扱い（弱い秘密鍵・`FINCODE_MODE=mock` を許容）になります。未設定・タイプミス・`staging` など上記以外の値はすべて本番扱いとなり、`JWT_SECRET_KEY` / `FINCODE_WEBHOOK_SECRET` がコミット済みデフォルトのままだと起動時に検証エラーで停止します。これは APP_ENV の設定漏れで本番が弱いデフォルト鍵のまま起動する（fail-open）のを防ぐためです。ローカル開発では `.env` に `APP_ENV=local` を必ず入れてください（`.env.example` に含まれています）。
 
 ## データベース
 

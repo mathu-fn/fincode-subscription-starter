@@ -89,6 +89,11 @@ server {
 }
 ```
 
+### セキュリティヘッダと `/metrics`
+
+- バックエンドは全レスポンスに `X-Content-Type-Options: nosniff` / `X-Frame-Options: DENY` / `Referrer-Policy: no-referrer` を付与します（`app/core/middleware.py` の `SecurityHeadersMiddleware`）。SPA 本体を保護する `Content-Security-Policy` は fincode.js / Google GIS の外部スクリプトを壊さないため**フロントの配信ホスト（Nginx 等）側で**設定してください。JWT を localStorage に保持する設計上、本番では CSP の付与を強く推奨します。
+- Prometheus メトリクスは `GET /metrics` で**未認証公開**されます（トラフィック量・レイテンシ・パス等が漏れます）。上記 Nginx 例では `location /api/` だけを backend へプロキシし `/metrics` は SPA フォールバックに落ちるため外部露出しませんが、全パスを backend へ転送する構成では `/metrics` を内部ネットワーク限定にするか Basic 認証等で保護してください。
+
 ## Webhook 受信
 
 fincode からの定期課金結果 Webhook は FastAPI プロセスが同期で処理します。バックグラウンドワーカーは本スターターには含まれていません。Webhook ハンドラは署名検証 → 冪等性チェック → DB upsert を 1 リクエスト内で終わらせて 204 を返します。
