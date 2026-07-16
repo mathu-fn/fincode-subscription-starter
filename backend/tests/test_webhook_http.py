@@ -59,6 +59,18 @@ async def test_missing_signature_returns_401(client: AsyncClient) -> None:
     assert response.json()["detail"]["code"] == "invalid_webhook_signature"
 
 
+async def test_oversized_body_returns_413(client: AsyncClient) -> None:
+    # 未認証・レート制限なしのエンドポイントなので、署名検証以前にサイズで打ち切る。
+    body = b'{"_pad":"' + b"A" * (64 * 1024 + 1) + b'"}'
+    response = await client.post(
+        "/api/webhooks/fincode",
+        content=body,
+        headers={"Fincode-Signature": _sign(body), "Content-Type": "application/json"},
+    )
+    assert response.status_code == 413, response.text
+    assert response.json()["detail"]["code"] == "payload_too_large"
+
+
 async def test_missing_event_id_returns_422(client: AsyncClient) -> None:
     body = _body({"event": "payment.succeeded", "data": {}})
     response = await client.post(

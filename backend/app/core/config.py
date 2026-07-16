@@ -4,6 +4,12 @@ from typing import Annotated, Self
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+# 本番セーフティ検証を緩めてよいと明示的に宣言された開発/テスト環境の許可リスト。
+# ここに無い値（"staging" / "production" / 未設定 / タイプミス）はすべて本番扱いにする。
+# 「本番の許可リスト」ではなく「開発の許可リスト」で判定するのは、判定漏れを常に
+# 安全側（strict）へ倒すため。
+_DEV_ENVIRONMENTS = frozenset({"local", "dev", "development", "test", "testing"})
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -13,7 +19,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_env: str = "local"
+    # 安全側デフォルト: 未設定なら "production"（strict）に倒す。既定を "local" に
+    # すると、本番デプロイで APP_ENV の設定を忘れた瞬間に _validate_production_safety
+    # が沈黙し（fail-open）、リポジトリにコミット済みの弱いデフォルト秘密鍵のまま
+    # 起動してしまう。ローカル/テストは APP_ENV=local を明示すること。
+    app_env: str = "production"
     app_url: str = "http://localhost:5173"
     api_url: str = "http://localhost:8000"
 
@@ -65,7 +75,7 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.app_env.strip().lower() in {"prod", "production"}
+        return self.app_env.strip().lower() not in _DEV_ENVIRONMENTS
 
     @model_validator(mode="after")
     def _validate_production_safety(self) -> Self:

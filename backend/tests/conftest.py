@@ -18,6 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from testcontainers.postgres import PostgresContainer
 
 # Set env BEFORE app modules import the settings.
+# APP_ENV must be an explicit dev value: Settings now defaults app_env to "production"
+# (safe-side), so without this the suite would boot in production mode and reject the
+# missing FINCODE_API_KEY / mock mode. See app/core/config.py.
+os.environ.setdefault("APP_ENV", "local")
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-please-change-very-long-string")
 os.environ.setdefault("FINCODE_WEBHOOK_SECRET", "test-webhook-secret")
 os.environ.setdefault("RATE_LIMIT_STORAGE_URI", "memory://")
@@ -71,9 +75,8 @@ def applied_migrations(postgres_container: PostgresContainer) -> str:
 
     get_settings.cache_clear()
 
-    from alembic.config import Config
-
     from alembic import command
+    from alembic.config import Config
 
     cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", sync_url)
