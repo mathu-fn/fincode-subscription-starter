@@ -84,6 +84,12 @@ class UnprocessableError(AppError):
     default_message = "The request could not be processed."
 
 
+class PayloadTooLargeError(AppError):
+    code = "payload_too_large"
+    http_status = 413
+    default_message = "The request body is too large."
+
+
 class ForbiddenError(AppError):
     code = "forbidden"
     http_status = 403
